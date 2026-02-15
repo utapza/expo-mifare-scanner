@@ -28,17 +28,17 @@ public class MifareScanner {
     public MifareScanner(NfcAdapter adapter, Activity activity) {
         this.nfcAdapter = adapter;
         this.currentActivity = activity;
-        Log.d(TAG, "MifareScanner initialized");
+        Log.i(TAG, "MifareScanner initialized - Discovery");
     }
 
     public void setOnCardScannedListener(OnCardScannedListener listener) {
         this.listener = listener;
-        Log.d(TAG, "Card scanned listener set");
+        Log.i(TAG, "Card scanned listener set - Discovery");
     }
 
     public boolean isNfcEnabled() {
         boolean enabled = nfcAdapter != null && nfcAdapter.isEnabled();
-        Log.d(TAG, "NFC enabled check: " + enabled);
+        Log.i(TAG, "NFC enabled check: " + enabled + " - Discovery");
         return enabled;
     }
 
@@ -68,12 +68,12 @@ public class MifareScanner {
         }
 
         isScanning = true;
-        Log.d(TAG, "Starting MIFARE scanning - Discovery");
+        Log.i(TAG, "Starting MIFARE scanning - Discovery");
 
         readerCallback = new NfcAdapter.ReaderCallback() {
             @Override
             public void onTagDiscovered(Tag tag) {
-                Log.d(TAG, "Tag discovered - Discovery");
+                Log.i(TAG, "Tag discovered - Discovery");
                 handleTag(tag);
             }
         };
@@ -83,7 +83,7 @@ public class MifareScanner {
 
         try {
             nfcAdapter.enableReaderMode(currentActivity, readerCallback, flags, null);
-            Log.d(TAG, "Reader mode enabled successfully - Discovery");
+            Log.i(TAG, "Reader mode enabled successfully - Discovery");
         } catch (Exception e) {
             isScanning = false;
             String errorMsg = "Failed to enable NFC reader mode: " + e.getMessage();
@@ -94,14 +94,14 @@ public class MifareScanner {
 
     public void stopScanning() {
         if (!isScanning) {
-            Log.d(TAG, "Not scanning, ignoring stop request");
+            Log.i(TAG, "Not scanning, ignoring stop request");
             return;
         }
 
         if (nfcAdapter != null && currentActivity != null) {
             try {
                 nfcAdapter.disableReaderMode(currentActivity);
-                Log.d(TAG, "Reader mode disabled");
+                Log.i(TAG, "Reader mode disabled");
             } catch (Exception e) {
                 Log.e(TAG, "Error disabling reader mode: " + e.getMessage(), e);
             }
@@ -114,7 +114,7 @@ public class MifareScanner {
     private void handleTag(Tag tag) {
         // Get UID from tag ID (this is the actual UID, not block 0)
         String uid = bytesToHex(tag.getId());
-        Log.d(TAG, "Processing tag with UID: " + uid + " - Discovery");
+        Log.i(TAG, "Processing tag with UID: " + uid + " - Discovery");
 
         String data = "";
         String rawData = "";
@@ -124,12 +124,12 @@ public class MifareScanner {
         if (ndef != null) {
             try {
                 ndef.connect();
-                Log.d(TAG, "NDEF detected, reading NDEF records - Reading");
+                Log.i(TAG, "NDEF detected, reading NDEF records - Reading");
                 
                 NdefMessage ndefMessage = ndef.getNdefMessage();
                 if (ndefMessage != null) {
                     NdefRecord[] records = ndefMessage.getRecords();
-                    Log.d(TAG, "Found " + records.length + " NDEF records - Reading");
+                    Log.i(TAG, "Found " + records.length + " NDEF records - Reading");
                     
                     List<String> textRecords = new ArrayList<>();
                     StringBuilder allData = new StringBuilder();
@@ -142,7 +142,7 @@ public class MifareScanner {
                                 if (text != null && !text.isEmpty()) {
                                     textRecords.add(text);
                                     allData.append(text);
-                                    Log.d(TAG, "Found text record: " + text.substring(0, Math.min(50, text.length())) + "... - Reading");
+                                    Log.i(TAG, "Found text record: " + text.substring(0, Math.min(50, text.length())) + "... - Reading");
                                 }
                             }
                         }
@@ -154,7 +154,7 @@ public class MifareScanner {
                                 String payloadStr = new String(payload, StandardCharsets.UTF_8);
                                 if (payloadStr.trim().length() > 0) {
                                     allData.append(payloadStr);
-                                    Log.d(TAG, "Found payload data: " + payloadStr.substring(0, Math.min(50, payloadStr.length())) + "... - Reading");
+                                    Log.i(TAG, "Found payload data: " + payloadStr.substring(0, Math.min(50, payloadStr.length())) + "... - Reading");
                                 }
                             } catch (Exception e) {
                                 // Ignore encoding errors
@@ -165,12 +165,12 @@ public class MifareScanner {
                     if (allData.length() > 0) {
                         data = allData.toString();
                         rawData = bytesToHex(ndefMessage.toByteArray());
-                        Log.d(TAG, "NDEF data extracted: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
+                        Log.i(TAG, "NDEF data extracted: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
                     }
                     
                     ndef.close();
                 } else {
-                    Log.d(TAG, "No NDEF message found - Reading");
+                    Log.i(TAG, "No NDEF message found - Reading");
                     ndef.close();
                 }
             } catch (Exception e) {
@@ -191,14 +191,14 @@ public class MifareScanner {
             try {
                 mifare = MifareClassic.get(tag);
                 if (mifare != null) {
-                    Log.d(TAG, "MIFARE Classic detected, type: " + mifare.getType() + " - Discovery");
+                    Log.i(TAG, "MIFARE Classic detected, type: " + mifare.getType() + " - Discovery");
                     
                     try {
                         mifare.connect();
-                        Log.d(TAG, "Connected to MIFARE card - Discovery");
+                        Log.i(TAG, "Connected to MIFARE card - Discovery");
 
                         int sectorCount = mifare.getSectorCount();
-                        Log.d(TAG, "Card has " + sectorCount + " sectors - Reading");
+                        Log.i(TAG, "Card has " + sectorCount + " sectors - Reading");
                         
                         StringBuilder allBlocksData = new StringBuilder();
                         List<Byte> allBytes = new ArrayList<>();
@@ -206,7 +206,7 @@ public class MifareScanner {
                         // Try to read multiple sectors
                         for (int sectorIndex = 0; sectorIndex < Math.min(sectorCount, 16); sectorIndex++) {
                             try {
-                                Log.d(TAG, "Attempting authentication on sector " + sectorIndex + " - Authentication");
+                                Log.i(TAG, "Attempting authentication on sector " + sectorIndex + " - Authentication");
                                 
                                 // Try default key first
                                 boolean authenticated = mifare.authenticateSectorWithKeyA(
@@ -223,17 +223,17 @@ public class MifareScanner {
                                 }
                                 
                                 if (!authenticated) {
-                                    Log.d(TAG, "Failed to authenticate sector " + sectorIndex + " - Authentication failed");
+                                    Log.i(TAG, "Failed to authenticate sector " + sectorIndex + " - Authentication failed");
                                     continue;
                                 }
 
-                                Log.d(TAG, "Successfully authenticated sector " + sectorIndex + " - Authentication");
+                                Log.i(TAG, "Successfully authenticated sector " + sectorIndex + " - Authentication");
 
                                 int firstBlock = mifare.sectorToBlock(sectorIndex);
                                 int blockCount = mifare.getBlockCountInSector(sectorIndex);
                                 int lastBlock = firstBlock + blockCount - 1; // Sector trailer
                                 
-                                Log.d(TAG, "Sector " + sectorIndex + ": blocks " + firstBlock + " to " + lastBlock + " (trailer at " + lastBlock + ") - Reading");
+                                Log.i(TAG, "Sector " + sectorIndex + ": blocks " + firstBlock + " to " + lastBlock + " (trailer at " + lastBlock + ") - Reading");
                                 
                                 // Read all blocks in this sector (except the last one which is the sector trailer)
                                 for (int blockOffset = 0; blockOffset < blockCount - 1; blockOffset++) {
@@ -242,7 +242,7 @@ public class MifareScanner {
                                         byte[] blockData = mifare.readBlock(blockNumber);
                                         String blockHex = bytesToHex(blockData);
                                         
-                                        Log.d(TAG, "Block " + blockNumber + " hex: " + blockHex.substring(0, Math.min(32, blockHex.length())) + "... - Reading");
+                                        Log.i(TAG, "Block " + blockNumber + " hex: " + blockHex.substring(0, Math.min(32, blockHex.length())) + "... - Reading");
                                         
                                         // Check if block is all zeros or all same byte (likely empty)
                                         boolean isEmpty = true;
@@ -255,7 +255,7 @@ public class MifareScanner {
                                         }
                                         
                                         if (isEmpty) {
-                                            Log.d(TAG, "Block " + blockNumber + " appears empty, skipping - Reading");
+                                            Log.i(TAG, "Block " + blockNumber + " appears empty, skipping - Reading");
                                             continue;
                                         }
                                         
@@ -285,9 +285,9 @@ public class MifareScanner {
                                         
                                         if (hasReadableText) {
                                             allBlocksData.append(blockStr);
-                                            Log.d(TAG, "Block " + blockNumber + " readable text: " + blockStr.substring(0, Math.min(50, blockStr.length())) + "... - Reading");
+                                            Log.i(TAG, "Block " + blockNumber + " readable text: " + blockStr.substring(0, Math.min(50, blockStr.length())) + "... - Reading");
                                         } else {
-                                            Log.d(TAG, "Block " + blockNumber + " doesn't contain readable text (printable: " + printableCount + "/" + blockStr.length() + ") - Reading");
+                                            Log.i(TAG, "Block " + blockNumber + " doesn't contain readable text (printable: " + printableCount + "/" + blockStr.length() + ") - Reading");
                                         }
                                         
                                     } catch (IOException e) {
@@ -296,12 +296,12 @@ public class MifareScanner {
                                 }
                                 
                             } catch (Exception e) {
-                                Log.d(TAG, "Error processing sector " + sectorIndex + ": " + e.getMessage());
+                                Log.i(TAG, "Error processing sector " + sectorIndex + ": " + e.getMessage());
                             }
                         }
 
                         mifare.close();
-                        Log.d(TAG, "MIFARE connection closed");
+                        Log.i(TAG, "MIFARE connection closed");
 
                         // Convert collected bytes to hex
                         byte[] allBytesArray = new byte[allBytes.size()];
@@ -318,7 +318,7 @@ public class MifareScanner {
                             int jsonEnd = data.lastIndexOf("}");
                             if (jsonStart >= 0 && jsonEnd > jsonStart) {
                                 data = data.substring(jsonStart, jsonEnd + 1);
-                                Log.d(TAG, "Found JSON in data: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
+                                Log.i(TAG, "Found JSON in data: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
                             }
                         } else if (allBytesArray.length > 0) {
                             // Try to parse as JSON or text
@@ -330,18 +330,18 @@ public class MifareScanner {
                             int jsonEnd = fullData.lastIndexOf("}");
                             if (jsonStart >= 0 && jsonEnd > jsonStart) {
                                 data = fullData.substring(jsonStart, jsonEnd + 1);
-                                Log.d(TAG, "Found JSON in raw bytes: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
+                                Log.i(TAG, "Found JSON in raw bytes: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
                             } else {
                                 // Just use the cleaned string
                                 data = fullData.trim();
                             }
                         }
                         
-                        Log.d(TAG, "MIFARE data extracted, length: " + data.length() + ", rawData length: " + rawData.length() + " - Success");
+                        Log.i(TAG, "MIFARE data extracted, length: " + data.length() + ", rawData length: " + rawData.length() + " - Success");
 
                     } catch (IOException e) {
                         Log.e(TAG, "Error reading MIFARE card: " + e.getMessage(), e);
-                        Log.d(TAG, "Tag handling failed - Failure");
+                        Log.i(TAG, "Tag handling failed - Failure");
                         try {
                             if (mifare != null && mifare.isConnected()) {
                                 mifare.close();
@@ -353,13 +353,13 @@ public class MifareScanner {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error handling tag: " + e.getMessage(), e);
-                Log.d(TAG, "Tag handling failed - Failure");
+                Log.i(TAG, "Tag handling failed - Failure");
             }
         }
 
         // Send event to JavaScript
         long timestamp = System.currentTimeMillis();
-        Log.d(TAG, "Sending onCardScanned event - Success");
+        Log.i(TAG, "Sending onCardScanned event - Success");
         if (listener != null) {
             listener.onCardScanned(uid, data, rawData, timestamp);
         }
@@ -399,6 +399,6 @@ public class MifareScanner {
 
     public void updateActivity(Activity activity) {
         this.currentActivity = activity;
-        Log.d(TAG, "Activity updated");
+        Log.i(TAG, "Activity updated");
     }
 }
