@@ -119,8 +119,87 @@ public class MifareScanner {
 
         String data = "";
         String rawData = "";
+        String rawMifareData = ""; // Raw MIFARE Classic block data for emulation
 
-        // First, try to read NDEF records (if card supports NDEF)
+        // STEP 1: Always read raw MIFARE Classic blocks first (for emulation)
+        // This ensures we have the raw data needed for proper emulation
+        MifareClassic mifare = MifareClassic.get(tag);
+        if (mifare != null) {
+            try {
+                mifare.connect();
+                Log.i(TAG, "Connected to MIFARE card for raw data reading - Discovery");
+
+                int sectorCount = mifare.getSectorCount();
+                Log.i(TAG, "Reading raw MIFARE data from " + sectorCount + " sectors - Reading");
+                
+                List<Byte> allRawBytes = new ArrayList<>();
+                
+                // Read all accessible sectors for raw data
+                for (int sectorIndex = 0; sectorIndex < Math.min(sectorCount, 16); sectorIndex++) {
+                    try {
+                        // Try default key authentication
+                        boolean authenticated = mifare.authenticateSectorWithKeyA(
+                            sectorIndex,
+                            MifareClassic.KEY_DEFAULT
+                        );
+                        
+                        if (!authenticated) {
+                            authenticated = mifare.authenticateSectorWithKeyB(
+                                sectorIndex,
+                                MifareClassic.KEY_DEFAULT
+                            );
+                        }
+                        
+                        if (!authenticated) {
+                            Log.i(TAG, "Cannot authenticate sector " + sectorIndex + " for raw read - Authentication failed");
+                            continue;
+                        }
+
+                        int firstBlock = mifare.sectorToBlock(sectorIndex);
+                        int blockCount = mifare.getBlockCountInSector(sectorIndex);
+                        
+                        // Read all blocks in sector (including trailer for complete raw data)
+                        for (int blockOffset = 0; blockOffset < blockCount; blockOffset++) {
+                            int blockNumber = firstBlock + blockOffset;
+                            try {
+                                byte[] blockData = mifare.readBlock(blockNumber);
+                                // Collect ALL bytes for raw emulation data
+                                for (byte b : blockData) {
+                                    allRawBytes.add(b);
+                                }
+                            } catch (IOException e) {
+                                Log.e(TAG, "Error reading block " + blockNumber + " for raw data: " + e.getMessage());
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.i(TAG, "Error reading sector " + sectorIndex + " for raw data: " + e.getMessage());
+                    }
+                }
+
+                mifare.close();
+                
+                // Convert raw bytes to hex string for emulation
+                if (allRawBytes.size() > 0) {
+                    byte[] rawBytesArray = new byte[allRawBytes.size()];
+                    for (int i = 0; i < allRawBytes.size(); i++) {
+                        rawBytesArray[i] = allRawBytes.get(i);
+                    }
+                    rawMifareData = bytesToHex(rawBytesArray);
+                    Log.i(TAG, "Raw MIFARE data collected: " + rawMifareData.length() + " hex chars - Success");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error reading raw MIFARE data: " + e.getMessage(), e);
+                try {
+                    if (mifare != null && mifare.isConnected()) {
+                        mifare.close();
+                    }
+                } catch (IOException closeException) {
+                    Log.e(TAG, "Error closing MIFARE connection: " + closeException.getMessage());
+                }
+            }
+        }
+
+        // STEP 2: Read NDEF records (if available) for logical card data
         Ndef ndef = Ndef.get(tag);
         if (ndef != null) {
             try {
@@ -165,6 +244,7 @@ public class MifareScanner {
                     
                     if (allData.length() > 0) {
                         data = allData.toString();
+                        // Store NDEF message bytes as rawData (for NDEF-based cards)
                         rawData = bytesToHex(ndefMessage.toByteArray());
                         Log.i(TAG, "NDEF data extracted: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
                     }
@@ -186,175 +266,34 @@ public class MifareScanner {
             }
         }
 
-        // If NDEF didn't work or returned empty, try MIFARE Classic direct reading
-        if (data.isEmpty()) {
-            MifareClassic mifare = null;
+        // STEP 3: If we have raw MIFARE data, use it for emulation (preferred)
+        // If we only have NDEF rawData, use that
+        if (!rawMifareData.isEmpty()) {
+            // Use raw MIFARE Classic data for emulation (most accurate)
+            rawData = rawMifareData;
+            Log.i(TAG, "Using raw MIFARE Classic data for emulation: " + rawData.length() + " hex chars");
+        } else if (rawData.isEmpty() && !rawMifareData.isEmpty()) {
+            // Fallback: use MIFARE data if NDEF didn't provide rawData
+            rawData = rawMifareData;
+        }
+        
+        // If we still don't have logical data and have raw MIFARE data, try to extract JSON from it
+        if (data.isEmpty() && !rawMifareData.isEmpty()) {
             try {
-                mifare = MifareClassic.get(tag);
-                if (mifare != null) {
-                    Log.i(TAG, "MIFARE Classic detected, type: " + mifare.getType() + " - Discovery");
-                    
-                    try {
-                        mifare.connect();
-                        Log.i(TAG, "Connected to MIFARE card - Discovery");
-
-                        int sectorCount = mifare.getSectorCount();
-                        Log.i(TAG, "Card has " + sectorCount + " sectors - Reading");
-                        
-                        StringBuilder allBlocksData = new StringBuilder();
-                        List<Byte> allBytes = new ArrayList<>();
-                        
-                        // Try to read multiple sectors
-                        for (int sectorIndex = 0; sectorIndex < Math.min(sectorCount, 16); sectorIndex++) {
-                            try {
-                                Log.i(TAG, "Attempting authentication on sector " + sectorIndex + " - Authentication");
-                                
-                                // Try default key first
-                                boolean authenticated = mifare.authenticateSectorWithKeyA(
-                                    sectorIndex,
-                                    MifareClassic.KEY_DEFAULT
-                                );
-                                
-                                if (!authenticated) {
-                                    // Try key B
-                                    authenticated = mifare.authenticateSectorWithKeyB(
-                                        sectorIndex,
-                                        MifareClassic.KEY_DEFAULT
-                                    );
-                                }
-                                
-                                if (!authenticated) {
-                                    Log.i(TAG, "Failed to authenticate sector " + sectorIndex + " - Authentication failed");
-                                    continue;
-                                }
-
-                                Log.i(TAG, "Successfully authenticated sector " + sectorIndex + " - Authentication");
-
-                                int firstBlock = mifare.sectorToBlock(sectorIndex);
-                                int blockCount = mifare.getBlockCountInSector(sectorIndex);
-                                int lastBlock = firstBlock + blockCount - 1; // Sector trailer
-                                
-                                Log.i(TAG, "Sector " + sectorIndex + ": blocks " + firstBlock + " to " + lastBlock + " (trailer at " + lastBlock + ") - Reading");
-                                
-                                // Read all blocks in this sector (except the last one which is the sector trailer)
-                                for (int blockOffset = 0; blockOffset < blockCount - 1; blockOffset++) {
-                                    int blockNumber = firstBlock + blockOffset;
-                                    try {
-                                        byte[] blockData = mifare.readBlock(blockNumber);
-                                        String blockHex = bytesToHex(blockData);
-                                        
-                                        Log.i(TAG, "Block " + blockNumber + " hex: " + blockHex.substring(0, Math.min(32, blockHex.length())) + "... - Reading");
-                                        
-                                        // Check if block is all zeros or all same byte (likely empty)
-                                        boolean isEmpty = true;
-                                        byte firstByte = blockData[0];
-                                        for (byte b : blockData) {
-                                            if (b != 0 && b != firstByte) {
-                                                isEmpty = false;
-                                                break;
-                                            }
-                                        }
-                                        
-                                        if (isEmpty) {
-                                            Log.i(TAG, "Block " + blockNumber + " appears empty, skipping - Reading");
-                                            continue;
-                                        }
-                                        
-                                        // Collect bytes
-                                        for (byte b : blockData) {
-                                            allBytes.add(b);
-                                        }
-                                        
-                                        // Try to read as string, but be more careful
-                                        String blockStr = new String(blockData, StandardCharsets.UTF_8);
-                                        // Remove null characters and control characters
-                                        blockStr = blockStr.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
-                                        
-                                        // Check if it looks like readable text (has printable ASCII or JSON-like characters)
-                                        boolean hasReadableText = false;
-                                        int printableCount = 0;
-                                        for (char c : blockStr.toCharArray()) {
-                                            if (c >= 32 && c < 127) { // Printable ASCII
-                                                printableCount++;
-                                            }
-                                        }
-                                        
-                                        // If at least 50% is printable, consider it readable
-                                        if (blockStr.length() > 0 && printableCount > blockStr.length() / 2) {
-                                            hasReadableText = true;
-                                        }
-                                        
-                                        if (hasReadableText) {
-                                            allBlocksData.append(blockStr);
-                                            Log.i(TAG, "Block " + blockNumber + " readable text: " + blockStr.substring(0, Math.min(50, blockStr.length())) + "... - Reading");
-                                        } else {
-                                            Log.i(TAG, "Block " + blockNumber + " doesn't contain readable text (printable: " + printableCount + "/" + blockStr.length() + ") - Reading");
-                                        }
-                                        
-                                    } catch (IOException e) {
-                                        Log.e(TAG, "Error reading block " + blockNumber + ": " + e.getMessage());
-                                    }
-                                }
-                                
-                            } catch (Exception e) {
-                                Log.i(TAG, "Error processing sector " + sectorIndex + ": " + e.getMessage());
-                            }
-                        }
-
-                        mifare.close();
-                        Log.i(TAG, "MIFARE connection closed");
-
-                        // Convert collected bytes to hex
-                        byte[] allBytesArray = new byte[allBytes.size()];
-                        for (int i = 0; i < allBytes.size(); i++) {
-                            allBytesArray[i] = allBytes.get(i);
-                        }
-                        rawData = bytesToHex(allBytesArray);
-                        
-                        // Use the string data if we found any
-                        if (allBlocksData.length() > 0) {
-                            data = allBlocksData.toString().trim();
-                            // Try to find JSON in the data
-                            int jsonStart = data.indexOf("{");
-                            int jsonEnd = data.lastIndexOf("}");
-                            if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                                data = data.substring(jsonStart, jsonEnd + 1);
-                                Log.i(TAG, "Found JSON in data: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
-                            }
-                        } else if (allBytesArray.length > 0) {
-                            // Try to parse as JSON or text
-                            String fullData = new String(allBytesArray, StandardCharsets.UTF_8);
-                            fullData = fullData.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
-                            
-                            // Look for JSON
-                            int jsonStart = fullData.indexOf("{");
-                            int jsonEnd = fullData.lastIndexOf("}");
-                            if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                                data = fullData.substring(jsonStart, jsonEnd + 1);
-                                Log.i(TAG, "Found JSON in raw bytes: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
-                            } else {
-                                // Just use the cleaned string
-                                data = fullData.trim();
-                            }
-                        }
-                        
-                        Log.i(TAG, "MIFARE data extracted, length: " + data.length() + ", rawData length: " + rawData.length() + " - Success");
-
-                    } catch (IOException e) {
-                        Log.e(TAG, "Error reading MIFARE card: " + e.getMessage(), e);
-                        Log.i(TAG, "Tag handling failed - Failure");
-                        try {
-                            if (mifare != null && mifare.isConnected()) {
-                                mifare.close();
-                            }
-                        } catch (IOException closeException) {
-                            Log.e(TAG, "Error closing MIFARE connection: " + closeException.getMessage());
-                        }
-                    }
+                // Convert hex back to bytes to parse
+                byte[] rawBytes = hexStringToBytes(rawMifareData);
+                String fullData = new String(rawBytes, StandardCharsets.UTF_8);
+                fullData = fullData.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
+                
+                // Look for JSON
+                int jsonStart = fullData.indexOf("{");
+                int jsonEnd = fullData.lastIndexOf("}");
+                if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                    data = fullData.substring(jsonStart, jsonEnd + 1);
+                    Log.i(TAG, "Extracted JSON from raw MIFARE data: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
                 }
             } catch (Exception e) {
-                Log.e(TAG, "Error handling tag: " + e.getMessage(), e);
-                Log.i(TAG, "Tag handling failed - Failure");
+                Log.i(TAG, "Could not extract JSON from raw MIFARE data: " + e.getMessage());
             }
         }
 
@@ -396,6 +335,19 @@ public class MifareScanner {
             result.append(String.format("%02x", b));
         }
         return result.toString();
+    }
+
+    /**
+     * Convert hex string to byte array.
+     */
+    private byte[] hexStringToBytes(String hex) {
+        int len = hex.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
+                                 + Character.digit(hex.charAt(i+1), 16));
+        }
+        return data;
     }
 
     public void updateActivity(Activity activity) {
