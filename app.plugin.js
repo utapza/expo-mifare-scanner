@@ -1,11 +1,15 @@
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod, withAndroidStrings } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Expo config plugin for ExpoMifareScanner
- * Adds NFC permissions, features, and HCE service to AndroidManifest.xml
+ * Adds NFC permissions, features, HCE service to AndroidManifest.xml
+ * and copies required resource files
  */
 const withMifareScanner = (config) => {
-  return withAndroidManifest(config, async (config) => {
+  // Step 1: Modify AndroidManifest.xml
+  config = withAndroidManifest(config, async (config) => {
     const androidManifest = config.modResults;
     const { manifest } = androidManifest;
 
@@ -91,6 +95,103 @@ const withMifareScanner = (config) => {
 
     return config;
   });
+
+  // Step 2: Copy apduservice.xml resource file
+  config = withDangerousMod(config, [
+    'android',
+    async (config) => {
+      const projectRoot = config.modRequest.platformProjectRoot;
+      const xmlDir = path.join(projectRoot, 'app', 'src', 'main', 'res', 'xml');
+      
+      // Ensure xml directory exists
+      if (!fs.existsSync(xmlDir)) {
+        fs.mkdirSync(xmlDir, { recursive: true });
+      }
+
+      // Path to destination in the app
+      const destXml = path.join(xmlDir, 'apduservice.xml');
+
+      // Try to find the source file - check multiple possible locations
+      let sourceXml = null;
+      
+      // Method 1: Try to resolve from node_modules (if installed as npm package)
+      try {
+        const modulePath = require.resolve('@utapza/expo-mifare-scanner/package.json');
+        const moduleDir = path.dirname(modulePath);
+        const candidatePath = path.join(moduleDir, 'android', 'src', 'main', 'res', 'xml', 'apduservice.xml');
+        if (fs.existsSync(candidatePath)) {
+          sourceXml = candidatePath;
+        }
+      } catch (e) {
+        // Module not found in node_modules, try other methods
+      }
+
+      // Method 2: Try relative to plugin file location (for local development)
+      if (!sourceXml) {
+        const pluginDir = __dirname;
+        const candidatePath = path.join(pluginDir, 'android', 'src', 'main', 'res', 'xml', 'apduservice.xml');
+        if (fs.existsSync(candidatePath)) {
+          sourceXml = candidatePath;
+        }
+      }
+
+      // Copy the file if source exists, otherwise create it
+      if (sourceXml && fs.existsSync(sourceXml)) {
+        fs.copyFileSync(sourceXml, destXml);
+        console.log(`[expo-mifare-scanner] Copied apduservice.xml from ${sourceXml} to ${destXml}`);
+      } else {
+        // Create the file if it doesn't exist
+        const apduContent = `<?xml version="1.0" encoding="utf-8"?>
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/apdu_service_description"
+    android:requireDeviceUnlock="false">
+    <aid-group android:description="@string/aid_group_description"
+        android:category="other">
+        <!-- MIFARE Classic AID -->
+        <aid-filter android:name="F0394148148100"/>
+        <!-- Generic NFC AID -->
+        <aid-filter android:name="D2760000850101"/>
+    </aid-group>
+</host-apdu-service>
+`;
+        fs.writeFileSync(destXml, apduContent);
+        console.log(`[expo-mifare-scanner] Created apduservice.xml at ${destXml}`);
+      }
+
+      return config;
+    },
+  ]);
+
+  // Step 3: Add string resources
+  config = withAndroidStrings(config, async (config) => {
+    config.modResults.resources.string = config.modResults.resources.string || [];
+    
+    // Check if strings already exist
+    const hasApduDesc = config.modResults.resources.string.some(
+      (str) => str.$.name === 'apdu_service_description'
+    );
+    const hasAidDesc = config.modResults.resources.string.some(
+      (str) => str.$.name === 'aid_group_description'
+    );
+
+    if (!hasApduDesc) {
+      config.modResults.resources.string.push({
+        $: { name: 'apdu_service_description' },
+        _: 'MIFARE Card Emulation Service',
+      });
+    }
+
+    if (!hasAidDesc) {
+      config.modResults.resources.string.push({
+        $: { name: 'aid_group_description' },
+        _: 'MIFARE Classic Card Emulation',
+      });
+    }
+
+    return config;
+  });
+
+  return config;
 };
 
 module.exports = withMifareScanner;

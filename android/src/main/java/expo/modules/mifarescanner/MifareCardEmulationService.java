@@ -35,10 +35,10 @@ public class MifareCardEmulationService extends HostApduService {
      *             - Plain text
      */
     public static void setCardData(String uid, String data) {
+        Log.i(TAG, "setCardData() called from MifareScanner - UID: " + uid + ", Data length: " + (data != null ? data.length() : 0));
         synchronized (dataLock) {
             cardUid = uid;
             if (data != null && !data.isEmpty()) {
-                Log.i(TAG, "Card data set - UID: " + uid + ", Data: " + data);
                 try {
                     // Check if data is a hex string (raw MIFARE data)
                     // Hex strings are typically longer and contain only hex characters
@@ -46,17 +46,20 @@ public class MifareCardEmulationService extends HostApduService {
                         // Convert hex string to bytes (raw MIFARE data)
                         cardData = hexStringToBytes(data);
                         Log.i(TAG, "Card data set (hex/raw) - UID: " + uid + ", Data length: " + cardData.length + " bytes");
+                        Log.d(TAG, "First 32 bytes (hex): " + bytesToHexStatic(Arrays.copyOf(cardData, Math.min(32, cardData.length))));
                     } else {
                         // Convert string data to bytes (JSON or text)
                         cardData = data.getBytes("UTF-8");
                         Log.i(TAG, "Card data set (text/JSON) - UID: " + uid + ", Data length: " + cardData.length + " bytes");
+                        Log.d(TAG, "Data preview: " + data.substring(0, Math.min(100, data.length())));
                     }
+                    Log.i(TAG, "Card emulation data is now ready - service will respond to APDU commands");
                 } catch (Exception e) {
-                    Log.e(TAG, "Error converting card data to bytes: " + e.getMessage());
+                    Log.e(TAG, "Error converting card data to bytes: " + e.getMessage(), e);
                     cardData = null;
                 }
             } else {
-                Log.i(TAG, "Card data set - UID: " + uid + ", Data is empty");
+                Log.w(TAG, "Card data set - UID: " + uid + ", Data is empty - emulation will not work");
                 cardData = null;
             }
         }
@@ -110,12 +113,22 @@ public class MifareCardEmulationService extends HostApduService {
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.i(TAG, "MifareCardEmulationService created");
+        Log.i(TAG, "MifareCardEmulationService onCreate() called - Service is being created by Android");
+        Log.i(TAG, "MifareCardEmulationService is now active and ready to handle APDU commands");
     }
     
     @Override
     public void onDeactivated(int reason) {
-        Log.i(TAG, "MifareCardEmulationService deactivated, reason: " + reason);
+        String reasonStr = "UNKNOWN";
+        switch (reason) {
+            case DEACTIVATION_LINK_LOSS:
+                reasonStr = "LINK_LOSS";
+                break;
+            case DEACTIVATION_DESELECTED:
+                reasonStr = "DESELECTED";
+                break;
+        }
+        Log.i(TAG, "MifareCardEmulationService onDeactivated() called - reason: " + reasonStr + " (" + reason + ")");
     }
     
     @Override
@@ -125,7 +138,7 @@ public class MifareCardEmulationService extends HostApduService {
             return UNKNOWN_CMD;
         }
         
-        Log.d(TAG, "Received APDU command: " + bytesToHex(commandApdu) + " (length: " + commandApdu.length + ")");
+        Log.d(TAG, "Received APDU command: " + bytesToHexStatic(commandApdu) + " (length: " + commandApdu.length + ")");
         
         // Check if card data is available
         synchronized (dataLock) {
@@ -227,9 +240,16 @@ public class MifareCardEmulationService extends HostApduService {
     }
     
     /**
-     * Convert byte array to hex string for logging.
+     * Convert byte array to hex string for logging (instance method).
      */
     private String bytesToHex(byte[] bytes) {
+        return bytesToHexStatic(bytes);
+    }
+    
+    /**
+     * Convert byte array to hex string for logging (static helper).
+     */
+    private static String bytesToHexStatic(byte[] bytes) {
         if (bytes == null) return "null";
         StringBuilder result = new StringBuilder();
         for (byte b : bytes) {
