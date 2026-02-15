@@ -1,4 +1,4 @@
-const { withAndroidManifest, withDangerousMod, withAndroidStrings } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -162,34 +162,53 @@ const withMifareScanner = (config) => {
     },
   ]);
 
-  // Step 3: Add string resources
-  config = withAndroidStrings(config, async (config) => {
-    config.modResults.resources.string = config.modResults.resources.string || [];
-    
-    // Check if strings already exist
-    const hasApduDesc = config.modResults.resources.string.some(
-      (str) => str.$.name === 'apdu_service_description'
-    );
-    const hasAidDesc = config.modResults.resources.string.some(
-      (str) => str.$.name === 'aid_group_description'
-    );
+  // Step 3: Add string resources to strings.xml
+  config = withDangerousMod(config, [
+    'android',
+    async (config) => {
+      const projectRoot = config.modRequest.platformProjectRoot;
+      const stringsPath = path.join(projectRoot, 'app', 'src', 'main', 'res', 'values', 'strings.xml');
+      
+      let stringsContent = '';
+      if (fs.existsSync(stringsPath)) {
+        stringsContent = fs.readFileSync(stringsPath, 'utf8');
+      } else {
+        // Create basic strings.xml if it doesn't exist
+        stringsContent = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>';
+      }
 
-    if (!hasApduDesc) {
-      config.modResults.resources.string.push({
-        $: { name: 'apdu_service_description' },
-        _: 'MIFARE Card Emulation Service',
-      });
-    }
+      // Check if strings already exist
+      const hasApduDesc = stringsContent.includes('apdu_service_description');
+      const hasAidDesc = stringsContent.includes('aid_group_description');
 
-    if (!hasAidDesc) {
-      config.modResults.resources.string.push({
-        $: { name: 'aid_group_description' },
-        _: 'MIFARE Classic Card Emulation',
-      });
-    }
+      if (!hasApduDesc || !hasAidDesc) {
+        // Parse and add strings
+        // Simple approach: add before closing </resources> tag
+        const closingTag = '</resources>';
+        const insertBefore = stringsContent.lastIndexOf(closingTag);
+        
+        if (insertBefore !== -1) {
+          let additions = '';
+          if (!hasApduDesc) {
+            additions += '  <string name="apdu_service_description">MIFARE Card Emulation Service</string>\n';
+          }
+          if (!hasAidDesc) {
+            additions += '  <string name="aid_group_description">MIFARE Classic Card Emulation</string>\n';
+          }
+          
+          stringsContent = 
+            stringsContent.slice(0, insertBefore) + 
+            additions + 
+            stringsContent.slice(insertBefore);
+          
+          fs.writeFileSync(stringsPath, stringsContent, 'utf8');
+          console.log(`[expo-mifare-scanner] Updated strings.xml at ${stringsPath}`);
+        }
+      }
 
-    return config;
-  });
+      return config;
+    },
+  ]);
 
   return config;
 };
