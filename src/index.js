@@ -89,7 +89,7 @@ export async function readNfcTag(options = {}) {
       ? 'ExpoMifareScanner requires a development build. Custom native modules are not supported in Expo Go.'
       : 'ExpoMifareScanner native module not available. Please rebuild the app with a development build.';
     throw new Error(errorMessage);
-  }M
+  }
 
   console.log('[ExpoMifareScanner] Checking if NFC is enabled...');
   // Check if NFC is enabled
