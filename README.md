@@ -21,6 +21,66 @@ npm install @utapza/expo-mifare-scanner
 
 **Note**: This module requires a development build. It does not work in Expo Go.
 
+## Setup
+
+### 1. Install the Package
+
+```bash
+npm install @utapza/expo-mifare-scanner
+```
+
+### 2. Configure app.json
+
+Add the module's config plugin to your `app.json`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      "@utapza/expo-mifare-scanner"
+    ]
+  }
+}
+```
+
+The plugin automatically:
+- Adds NFC permissions to AndroidManifest.xml
+- Configures the module for your app
+
+### 3. Generate Native Code
+
+After installing and configuring, regenerate your native code:
+
+```bash
+npx expo prebuild --platform android --clean
+```
+
+### 4. Build Development Build
+
+Since this uses custom native code, you need a development build:
+
+```bash
+# Build and run on Android
+npx expo run:android
+
+# Or build APK
+cd android && ./gradlew assembleDebug
+```
+
+### 5. Verify Installation
+
+Check that the module is properly linked:
+
+```bash
+# Check if module is in node_modules
+ls node_modules/@utapza/expo-mifare-scanner
+
+# Verify in Android build
+cd android && ./gradlew projects | grep mifare
+```
+
+You should see `:expo-mifare-scanner` in the project list.
+
 ## Usage
 
 ### Simple API (Recommended)
@@ -141,19 +201,58 @@ Remove event listener (for advanced use cases).
 - NFC enabled on device
 - Expo SDK 54+
 
-## Development Build
+## Complete Example
 
-Since this uses custom native code, you need a development build:
+Here's a complete example of integrating the module into your app:
 
-```bash
-# Install dependencies
-npm install
+```javascript
+import React, { useState } from 'react';
+import { View, Button, Text, Alert } from 'react-native';
+import { readNfcTag, isNfcEnabled } from '@utapza/expo-mifare-scanner';
 
-# Generate native code
-npx expo prebuild --platform android
+export default function ScanScreen() {
+  const [scanning, setScanning] = useState(false);
+  const [cardData, setCardData] = useState(null);
 
-# Build and run
-npx expo run:android
+  const handleScan = async () => {
+    try {
+      // Check if NFC is enabled
+      const enabled = await isNfcEnabled();
+      if (!enabled) {
+        Alert.alert('NFC Disabled', 'Please enable NFC in your device settings.');
+        return;
+      }
+
+      setScanning(true);
+      
+      // Scan for card (automatically starts, waits, and stops)
+      const data = await readNfcTag({ timeout: 15000 });
+      
+      setCardData(data);
+      Alert.alert('Success', `Card scanned! UID: ${data.uid}`);
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <View style={{ padding: 20 }}>
+      <Button 
+        title={scanning ? 'Scanning...' : 'Scan Card'} 
+        onPress={handleScan}
+        disabled={scanning}
+      />
+      {cardData && (
+        <View style={{ marginTop: 20 }}>
+          <Text>UID: {cardData.uid}</Text>
+          <Text>Data: {cardData.data}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
 ```
 
 ## How It Works
@@ -171,6 +270,132 @@ The module throws descriptive errors:
 - `"NFC scan timed out after Xms"` - No tag detected within timeout
 - `"Failed to start NFC scanning"` - System error starting scan
 - `"ExpoMifareScanner requires a development build"` - Running in Expo Go
+
+## Troubleshooting
+
+### Module Not Found Error
+
+If you see `"Cannot find native module 'ExpoMifareScanner'"`:
+
+1. **Make sure you're using a development build** (not Expo Go):
+   ```bash
+   npx expo run:android
+   ```
+
+2. **Verify the module is installed**:
+   ```bash
+   ls node_modules/@utapza/expo-mifare-scanner
+   ```
+
+3. **Regenerate native code**:
+   ```bash
+   npx expo prebuild --platform android --clean
+   ```
+
+4. **Rebuild the app**:
+   ```bash
+   npx expo run:android
+   ```
+
+### Plugin Not Applied
+
+If NFC permissions are missing:
+
+1. **Check app.json** has the plugin:
+   ```json
+   {
+     "plugins": ["@utapza/expo-mifare-scanner"]
+   }
+   ```
+
+2. **Regenerate native code**:
+   ```bash
+   npx expo prebuild --platform android --clean
+   ```
+
+3. **Check AndroidManifest.xml** (in `android/app/src/main/AndroidManifest.xml`):
+   ```xml
+   <uses-permission android:name="android.permission.NFC" />
+   ```
+
+### Build Errors
+
+If you get build errors:
+
+1. **Clean build**:
+   ```bash
+   cd android && ./gradlew clean
+   ```
+
+2. **Check Expo SDK version** (requires SDK 54+):
+   ```bash
+   npx expo --version
+   ```
+
+3. **Verify Android SDK**:
+   - `minSdkVersion`: 24+
+   - `compileSdkVersion`: 35
+   - `targetSdkVersion`: 34
+
+### NFC Not Working
+
+If NFC scanning doesn't work:
+
+1. **Check device has NFC**:
+   ```javascript
+   const enabled = await isNfcEnabled();
+   console.log('NFC enabled:', enabled);
+   ```
+
+2. **Enable NFC in device settings**
+
+3. **Check app is in foreground** (NFC requires foreground activity)
+
+4. **Check logs**:
+   ```bash
+   adb logcat | grep -i mifare
+   ```
+
+## Migration from Local Module
+
+If you were using a local file dependency:
+
+1. **Update package.json**:
+   ```json
+   {
+     "dependencies": {
+       "@utapza/expo-mifare-scanner": "^1.0.0"
+     }
+   }
+   ```
+
+2. **Update app.json**:
+   ```json
+   {
+     "plugins": ["@utapza/expo-mifare-scanner"]
+   }
+   ```
+
+3. **Update imports**:
+   ```javascript
+   // Old
+   import { readNfcTag } from './expo-modules/expo-mifare-scanner/src/index';
+   
+   // New
+   import { readNfcTag } from '@utapza/expo-mifare-scanner';
+   ```
+
+4. **Remove local module** (optional):
+   ```bash
+   rm -rf expo-modules/expo-mifare-scanner
+   ```
+
+5. **Reinstall and rebuild**:
+   ```bash
+   npm install
+   npx expo prebuild --platform android --clean
+   npx expo run:android
+   ```
 
 ## License
 

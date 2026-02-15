@@ -14,11 +14,13 @@ buildscript {
 
 android {
   namespace "expo.modules.mifarescanner"
-  compileSdkVersion rootProject.ext.compileSdkVersion
+  // Use rootProject.ext values (set by Expo's build system when autolinked)
+  // Fallback to defaults if not available (shouldn't happen in normal Expo projects)
+  compileSdkVersion rootProject.ext.hasProperty("compileSdkVersion") ? rootProject.ext.compileSdkVersion : 35
 
   defaultConfig {
-    minSdkVersion rootProject.ext.minSdkVersion
-    targetSdkVersion rootProject.ext.targetSdkVersion
+    minSdkVersion rootProject.ext.hasProperty("minSdkVersion") ? rootProject.ext.minSdkVersion : 24
+    targetSdkVersion rootProject.ext.hasProperty("targetSdkVersion") ? rootProject.ext.targetSdkVersion : 34
   }
 
   lintOptions {
