@@ -80,5 +80,42 @@ class MifareScannerModule : Module() {
         throw Exception("Failed to write NFC tag: ${e.message}", e)
       }
     }
+
+    Function("startCardEmulation") { uid: String, data: String ->
+      try {
+        val scanner = mifareScanner
+        if (scanner == null) {
+          throw Exception("MIFARE scanner is not initialized. NFC adapter may not be available.")
+        }
+        scanner.startCardEmulation(uid, data)
+      } catch (e: Exception) {
+        throw Exception("Failed to start card emulation: ${e.message}", e)
+      }
+    }
+
+    Function("stopCardEmulation") {
+      try {
+        val scanner = mifareScanner
+        if (scanner == null) {
+          throw Exception("MIFARE scanner is not initialized. NFC adapter may not be available.")
+        }
+        scanner.stopCardEmulation()
+      } catch (e: Exception) {
+        throw Exception("Failed to stop card emulation: ${e.message}", e)
+      }
+    }
+
+    Function("isCardEmulationActive") {
+      try {
+        val scanner = mifareScanner
+        if (scanner == null) {
+          return@Function false
+        }
+        scanner.isCardEmulationActive()
+      } catch (e: Exception) {
+        android.util.Log.e(TAG, "Error checking card emulation status: ${e.message}", e)
+        false
+      }
+    }
   }
 }

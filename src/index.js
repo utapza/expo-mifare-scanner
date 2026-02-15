@@ -329,3 +329,52 @@ export async function readNfcTag(options = {}) {
     }
   });
 }
+
+/**
+ * Emulate card - handles starting and stopping card emulation
+ * 
+ * @param {Object} options - Configuration options
+ * @param {boolean} options.enabled - If true, start emulation; if false, stop emulation
+ * @param {string} uid - The card UID (hex string) - required when enabled is true
+ * @param {string} data - The card data (JSON string or raw data) - required when enabled is true
+ * @returns {Promise<void>}
+ * 
+ * @example
+ * // Start emulation
+ * await emulateCard({ enabled: true }, '12345678', JSON.stringify({ studentId: '12345' }));
+ * 
+ * // Stop emulation
+ * await emulateCard({ enabled: false });
+ */
+export async function emulateCard(options = {}, uid = null, data = null) {
+  const { enabled } = options;
+
+  if (!ExpoMifareScanner) {
+    const errorMessage = isExpoGo 
+      ? 'ExpoMifareScanner requires a development build. Custom native modules are not supported in Expo Go.'
+      : 'ExpoMifareScanner native module not available. Please rebuild the app with a development build.';
+    throw new Error(errorMessage);
+  }
+
+  if (enabled === true) {
+    // Start emulation
+    if (!uid || typeof uid !== 'string') {
+      throw new Error('UID must be a non-empty string when starting emulation');
+    }
+
+    if (!data || typeof data !== 'string') {
+      throw new Error('Data must be a non-empty string when starting emulation');
+    }
+
+    console.log('[ExpoMifareScanner] Starting card emulation - UID:', uid);
+    await ExpoMifareScanner.startCardEmulation(uid, data);
+    console.log('[ExpoMifareScanner] Card emulation started');
+  } else if (enabled === false) {
+    // Stop emulation
+    console.log('[ExpoMifareScanner] Stopping card emulation');
+    await ExpoMifareScanner.stopCardEmulation();
+    console.log('[ExpoMifareScanner] Card emulation stopped');
+  } else {
+    throw new Error('options.enabled must be either true or false');
+  }
+}

@@ -659,4 +659,35 @@ public class MifareScanner {
         this.currentActivity = activity;
         Log.i(TAG, "Activity updated");
     }
+
+    /**
+     * Start Host Card Emulation (HCE) with the provided card data.
+     * @param uid The card UID (hex string)
+     * @param data The card data (JSON string or raw data)
+     */
+    public void startCardEmulation(String uid, String data) {
+        Log.i(TAG, "Starting card emulation - UID: " + uid);
+        MifareCardEmulationService.setCardData(uid, data);
+        Log.i(TAG, "Card emulation started successfully");
+    }
+
+    /**
+     * Stop Host Card Emulation (HCE).
+     */
+    public void stopCardEmulation() {
+        Log.i(TAG, "Stopping card emulation");
+        MifareCardEmulationService.clearCardData();
+        Log.i(TAG, "Card emulation stopped");
+    }
+
+    /**
+     * Check if card emulation is active.
+     * @return true if card data is set, false otherwise
+     */
+    public boolean isCardEmulationActive() {
+        String uid = MifareCardEmulationService.getCardUid();
+        boolean active = uid != null && !uid.isEmpty();
+        Log.i(TAG, "Card emulation active: " + active);
+        return active;
+    }
 }
