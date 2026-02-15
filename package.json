@@ -1,0 +1,31 @@
+{
+  "name": "@utapza/expo-mifare-scanner",
+  "version": "1.0.0",
+  "description": "Expo module for scanning MIFARE Classic cards",
+  "main": "src/index.js",
+  "keywords": [
+    "react-native",
+    "expo",
+    "mifare",
+    "nfc",
+    "expo-module"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/utapza/expo-mifare-scanner.git"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "expo-modules-core": "*"
+  },
+  "files": [
+    "src",
+    "android/src",
+    "android/build.gradle",
+    "expo-module.config.json",
+    "app.plugin.js",
+    "README.md"
+  ]
+}
