@@ -212,8 +212,9 @@ public class MifareCardEmulationService extends HostApduService {
     
     /**
      * Convert hex string to byte array.
+     * Static method to allow calling from static context.
      */
-    private byte[] hexStringToBytes(String hex) {
+    private static byte[] hexStringToBytes(String hex) {
         int len = hex.length();
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
