@@ -29,16 +29,27 @@ public class MifareCardEmulationService extends HostApduService {
     /**
      * Set the card data to emulate.
      * @param uid The card UID (hex string)
-     * @param data The card data (JSON string or raw data)
+     * @param data The card data - can be:
+     *             - Hex string (raw MIFARE data) - preferred for emulation
+     *             - JSON string (logical card data)
+     *             - Plain text
      */
     public static void setCardData(String uid, String data) {
         synchronized (dataLock) {
             cardUid = uid;
             if (data != null && !data.isEmpty()) {
-                // Convert data string to bytes
                 try {
-                    cardData = data.getBytes("UTF-8");
-                    Log.i(TAG, "Card data set - UID: " + uid + ", Data length: " + cardData.length);
+                    // Check if data is a hex string (raw MIFARE data)
+                    // Hex strings are typically longer and contain only hex characters
+                    if (isHexString(data)) {
+                        // Convert hex string to bytes (raw MIFARE data)
+                        cardData = hexStringToBytes(data);
+                        Log.i(TAG, "Card data set (hex/raw) - UID: " + uid + ", Data length: " + cardData.length + " bytes");
+                    } else {
+                        // Convert string data to bytes (JSON or text)
+                        cardData = data.getBytes("UTF-8");
+                        Log.i(TAG, "Card data set (text/JSON) - UID: " + uid + ", Data length: " + cardData.length + " bytes");
+                    }
                 } catch (Exception e) {
                     Log.e(TAG, "Error converting card data to bytes: " + e.getMessage());
                     cardData = null;
@@ -47,6 +58,31 @@ public class MifareCardEmulationService extends HostApduService {
                 cardData = null;
             }
         }
+    }
+    
+    /**
+     * Check if a string is a hex string (contains only hex characters and is even length).
+     */
+    private static boolean isHexString(String str) {
+        if (str == null || str.length() < 2 || str.length() % 2 != 0) {
+            return false;
+        }
+        // Check if all characters are hex (0-9, a-f, A-F)
+        for (char c : str.toCharArray()) {
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+                return false;
+            }
+        }
+        // If it's a long hex string (likely raw data), it's probably hex
+        // If it's short and looks like JSON, it's probably not hex
+        if (str.length() > 64 && str.length() % 2 == 0) {
+            return true; // Long hex string, likely raw data
+        }
+        // For shorter strings, check if it starts with '{' (JSON) or contains spaces (text)
+        if (str.trim().startsWith("{") || str.contains(" ")) {
+            return false; // Likely JSON or text
+        }
+        return true; // Default to hex if it passes the character check
     }
     
     /**
