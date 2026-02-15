@@ -38,6 +38,7 @@ public class MifareCardEmulationService extends HostApduService {
         synchronized (dataLock) {
             cardUid = uid;
             if (data != null && !data.isEmpty()) {
+                Log.i(TAG, "Card data set - UID: " + uid + ", Data: " + data);
                 try {
                     // Check if data is a hex string (raw MIFARE data)
                     // Hex strings are typically longer and contain only hex characters
@@ -55,6 +56,7 @@ public class MifareCardEmulationService extends HostApduService {
                     cardData = null;
                 }
             } else {
+                Log.i(TAG, "Card data set - UID: " + uid + ", Data is empty");
                 cardData = null;
             }
         }
