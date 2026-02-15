@@ -80,41 +80,66 @@ export async function isNfcEnabled() {
  * }
  */
 export async function readNfcTag(options = {}) {
+  console.log('[ExpoMifareScanner] readNfcTag() called with options:', options);
   const { timeout = 30000 } = options;
 
   if (!ExpoMifareScanner) {
+    console.error('[ExpoMifareScanner] ExpoMifareScanner is null/undefined');
     const errorMessage = isExpoGo 
       ? 'ExpoMifareScanner requires a development build. Custom native modules are not supported in Expo Go.'
       : 'ExpoMifareScanner native module not available. Please rebuild the app with a development build.';
     throw new Error(errorMessage);
-  }
+  }M
 
+  console.log('[ExpoMifareScanner] Checking if NFC is enabled...');
   // Check if NFC is enabled
   const nfcEnabled = await isNfcEnabled();
+  console.log('[ExpoMifareScanner] NFC enabled:', nfcEnabled);
   if (!nfcEnabled) {
     throw new Error('NFC is not enabled on this device. Please enable NFC in settings.');
   }
 
+  console.log('[ExpoMifareScanner] Creating Promise for NFC scan...');
   return new Promise((resolve, reject) => {
     let scanSubscription = null;
     let timeoutId = null;
     let isResolved = false;
+    
+    console.log('[ExpoMifareScanner] Promise executor started');
 
     // Cleanup function
     const cleanup = () => {
+      console.log('[ExpoMifareScanner] cleanup() called');
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
+        console.log('[ExpoMifareScanner] Cleared timeout');
       }
       if (scanSubscription) {
         removeCardScannedListener(scanSubscription);
         scanSubscription = null;
+        console.log('[ExpoMifareScanner] Removed scan subscription');
       }
       // Stop scanning (best effort, don't wait for it)
       if (ExpoMifareScanner) {
-        ExpoMifareScanner.stopScanning().catch(() => {
-          // Ignore errors when stopping
-        });
+        console.log('[ExpoMifareScanner] Calling stopScanning()');
+        try {
+          const stopResult = ExpoMifareScanner.stopScanning();
+          console.log('[ExpoMifareScanner] stopScanning() returned:', typeof stopResult, stopResult);
+          
+          // Check if it's a Promise before calling .catch()
+          if (stopResult && typeof stopResult === 'object' && typeof stopResult.catch === 'function') {
+            stopResult.catch((err) => {
+              console.log('[ExpoMifareScanner] stopScanning() error (ignored):', err);
+            });
+          } else {
+            console.log('[ExpoMifareScanner] stopScanning() did not return a Promise, skipping .catch()');
+          }
+        } catch (error) {
+          console.log('[ExpoMifareScanner] Error calling stopScanning():', error);
+        }
+      } else {
+        console.log('[ExpoMifareScanner] ExpoMifareScanner is null, skipping stopScanning()');
       }
     };
 
@@ -129,11 +154,15 @@ export async function readNfcTag(options = {}) {
 
     // Set up event listener
     try {
+      console.log('[ExpoMifareScanner] Setting up card scanned listener...');
       scanSubscription = addCardScannedListener((event) => {
+        console.log('[ExpoMifareScanner] Card scanned event received:', event);
         if (isResolved) {
+          console.log('[ExpoMifareScanner] Already resolved, ignoring event');
           return; // Already resolved/rejected
         }
 
+        console.log('[ExpoMifareScanner] Processing card scan event...');
         isResolved = true;
         cleanup();
 
@@ -145,18 +174,29 @@ export async function readNfcTag(options = {}) {
           timestamp: event.timestamp,
         };
 
+        console.log('[ExpoMifareScanner] Resolving with card data:', cardData);
         resolve(cardData);
       });
+      console.log('[ExpoMifareScanner] Card scanned listener set up, subscription:', scanSubscription);
 
       // Start scanning
-      startScanning().catch((error) => {
-        if (!isResolved) {
-          isResolved = true;
-          cleanup();
-          reject(new Error(`Failed to start NFC scanning: ${error.message}`));
+      console.log('[ExpoMifareScanner] Starting scan...');
+      (async () => {
+        try {
+          console.log('[ExpoMifareScanner] Calling startScanning()...');
+          const startResult = await startScanning();
+          console.log('[ExpoMifareScanner] startScanning() completed:', startResult);
+        } catch (error) {
+          console.error('[ExpoMifareScanner] Error in startScanning():', error);
+          if (!isResolved) {
+            isResolved = true;
+            cleanup();
+            reject(new Error(`Failed to start NFC scanning: ${error.message}`));
+          }
         }
-      });
+      })();
     } catch (error) {
+      console.error('[ExpoMifareScanner] Error setting up scan:', error);
       if (!isResolved) {
         isResolved = true;
         cleanup();
