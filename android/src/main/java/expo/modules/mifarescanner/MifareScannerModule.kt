@@ -41,10 +41,11 @@ class MifareScannerModule : Module() {
 
     Function("startScanning") {
       try {
-        if (mifareScanner == null) {
+        val scanner = mifareScanner
+        if (scanner == null) {
           throw Exception("MIFARE scanner is not initialized. NFC adapter may not be available.")
         }
-        mifareScanner.startScanning()
+        scanner.startScanning()
       } catch (e: Exception) {
         throw Exception("Failed to start NFC scanning: ${e.message}", e)
       }
