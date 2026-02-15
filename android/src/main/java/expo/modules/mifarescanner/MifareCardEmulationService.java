@@ -12,6 +12,13 @@ import java.util.Arrays;
 public class MifareCardEmulationService extends HostApduService {
     private static final String TAG = "MifareCardEmulation";
     
+    // Static initializer to verify class is loaded
+    static {
+        Log.i(TAG, "========================================");
+        Log.i(TAG, "MifareCardEmulationService class loaded!");
+        Log.i(TAG, "========================================");
+    }
+    
     // APDU command constants
     private static final byte[] SELECT_APDU = {
         (byte) 0x00, (byte) 0xA4, (byte) 0x04, (byte) 0x00, (byte) 0x07,
@@ -35,7 +42,10 @@ public class MifareCardEmulationService extends HostApduService {
      *             - Plain text
      */
     public static void setCardData(String uid, String data) {
-        Log.i(TAG, "setCardData() called from MifareScanner - UID: " + uid + ", Data length: " + (data != null ? data.length() : 0));
+        Log.i(TAG, "========================================");
+        Log.i(TAG, "MifareCardEmulationService.setCardData() CALLED");
+        Log.i(TAG, "UID: " + uid + ", Data length: " + (data != null ? data.length() : 0));
+        Log.i(TAG, "========================================");
         synchronized (dataLock) {
             cardUid = uid;
             if (data != null && !data.isEmpty()) {

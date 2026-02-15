@@ -362,7 +362,26 @@ public class MifareScanner {
      */
     public void startCardEmulation(String uid, String data) {
         Log.i(TAG, "Starting card emulation - UID: " + uid);
-        MifareCardEmulationService.setCardData(uid, data);
+        Log.d(TAG, "About to call MifareCardEmulationService.setCardData()");
+        
+        // Verify class is accessible
+        try {
+            Class<?> serviceClass = Class.forName("expo.modules.mifarescanner.MifareCardEmulationService");
+            Log.i(TAG, "MifareCardEmulationService class found: " + serviceClass.getName());
+        } catch (ClassNotFoundException e) {
+            Log.e(TAG, "MifareCardEmulationService class NOT FOUND!", e);
+        }
+        
+        try {
+            MifareCardEmulationService.setCardData(uid, data);
+            Log.i(TAG, "Successfully called MifareCardEmulationService.setCardData()");
+        } catch (NoClassDefFoundError e) {
+            Log.e(TAG, "NoClassDefFoundError calling MifareCardEmulationService: " + e.getMessage(), e);
+            throw new RuntimeException("MifareCardEmulationService class not found in runtime", e);
+        } catch (Exception e) {
+            Log.e(TAG, "Error calling MifareCardEmulationService.setCardData(): " + e.getMessage(), e);
+            throw e;
+        }
         Log.i(TAG, "Card emulation started successfully");
     }
 
