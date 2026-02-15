@@ -68,5 +68,17 @@ class MifareScannerModule : Module() {
         false
       }
     }
+
+    Function("writeNfcTag") { data: String, timeoutMs: Long ->
+      try {
+        val scanner = mifareScanner
+        if (scanner == null) {
+          throw Exception("MIFARE scanner is not initialized. NFC adapter may not be available.")
+        }
+        scanner.writeNfcTag(data, timeoutMs)
+      } catch (e: Exception) {
+        throw Exception("Failed to write NFC tag: ${e.message}", e)
+      }
+    }
   }
 }

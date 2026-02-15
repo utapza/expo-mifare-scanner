@@ -63,6 +63,130 @@ export async function isNfcEnabled() {
 }
 
 /**
+ * Write data to NFC tag - simplified async API
+ * Waits for tag discovery, writes data in NDEF format, and returns success
+ * 
+ * @param {string} data - The data string to write (will be written as NDEF text record)
+ * @param {Object} options - Optional configuration
+ * @param {number} options.timeout - Timeout in milliseconds (default: 30000 = 30 seconds)
+ * @returns {Promise<boolean>} Promise that resolves with true if write was successful
+ * 
+ * @example
+ * try {
+ *   const success = await writeNfcTag(JSON.stringify(cardData), { timeout: 10000 });
+ *   console.log('Write successful:', success);
+ * } catch (error) {
+ *   console.error('Write failed:', error.message);
+ * }
+ */
+export async function writeNfcTag(data, options = {}) {
+  console.log('[ExpoMifareScanner] writeNfcTag() called with data length:', data?.length);
+  const { timeout = 30000 } = options;
+
+  if (!ExpoMifareScanner) {
+    const errorMessage = isExpoGo 
+      ? 'ExpoMifareScanner requires a development build. Custom native modules are not supported in Expo Go.'
+      : 'ExpoMifareScanner native module not available. Please rebuild the app with a development build.';
+    throw new Error(errorMessage);
+  }
+
+  if (!data || typeof data !== 'string') {
+    throw new Error('Data must be a non-empty string');
+  }
+
+  // Check if NFC is enabled
+  const nfcEnabled = await isNfcEnabled();
+  if (!nfcEnabled) {
+    throw new Error('NFC is not enabled on this device. Please enable NFC in settings.');
+  }
+
+  console.log('[ExpoMifareScanner] Writing data to tag, timeout:', timeout);
+  
+  return new Promise((resolve, reject) => {
+    let writeSubscription = null;
+    let timeoutId = null;
+    let isResolved = false;
+
+    // Cleanup function
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (writeSubscription) {
+        removeCardScannedListener(writeSubscription);
+        writeSubscription = null;
+      }
+      // Stop scanning (best effort)
+      if (ExpoMifareScanner) {
+        try {
+          const stopResult = ExpoMifareScanner.stopScanning();
+          if (stopResult && typeof stopResult === 'object' && typeof stopResult.catch === 'function') {
+            stopResult.catch(() => {});
+          }
+        } catch (e) {
+          // Ignore errors when stopping
+        }
+      }
+    };
+
+    // Set up timeout
+    timeoutId = setTimeout(() => {
+      if (!isResolved) {
+        isResolved = true;
+        cleanup();
+        reject(new Error(`NFC write timed out after ${timeout}ms. Please try again.`));
+      }
+    }, timeout);
+
+    // Set up event listener to wait for tag discovery
+    try {
+      console.log('[ExpoMifareScanner] Setting up tag discovery listener for write...');
+      writeSubscription = addCardScannedListener(async (event) => {
+        if (isResolved) {
+          return;
+        }
+
+        console.log('[ExpoMifareScanner] Tag discovered for writing, UID:', event.uid);
+        isResolved = true;
+        cleanup();
+
+        try {
+          // Call native write function
+          console.log('[ExpoMifareScanner] Calling native writeNfcTag...');
+          const result = await ExpoMifareScanner.writeNfcTag(data, 5000); // 5 second timeout for actual write
+          console.log('[ExpoMifareScanner] Write completed, result:', result);
+          resolve(result);
+        } catch (error) {
+          console.error('[ExpoMifareScanner] Write error:', error);
+          reject(new Error(`Failed to write to tag: ${error.message}`));
+        }
+      });
+
+      // Start scanning to discover tag
+      console.log('[ExpoMifareScanner] Starting scan for write operation...');
+      (async () => {
+        try {
+          await startScanning();
+        } catch (error) {
+          if (!isResolved) {
+            isResolved = true;
+            cleanup();
+            reject(new Error(`Failed to start scanning for write: ${error.message}`));
+          }
+        }
+      })();
+    } catch (error) {
+      if (!isResolved) {
+        isResolved = true;
+        cleanup();
+        reject(new Error(`Failed to set up write: ${error.message}`));
+      }
+    }
+  });
+}
+
+/**
  * Read NFC tag - simplified async API
  * Starts scanning, waits for tag discovery, automatically stops, and returns data
  * 
