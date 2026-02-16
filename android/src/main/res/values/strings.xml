@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="apdu_service_description">MIFARE Card Emulation Service</string>
-    <string name="aid_group_description">MIFARE Classic Card Emulation</string>
+    <!-- Changed for Type 4 NDEF support: Updated descriptions for NFC Forum Type 4 Tag emulation -->
+    <string name="apdu_service_description">NFC Type 4 Tag Emulation Service</string>
+    <string name="aid_group_description">NFC Forum Type 4 Tag with NDEF</string>
 </resources>

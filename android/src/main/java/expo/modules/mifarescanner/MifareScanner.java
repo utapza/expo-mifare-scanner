@@ -119,10 +119,82 @@ public class MifareScanner {
 
         String data = "";
         String rawData = "";
-        String rawMifareData = ""; // Raw MIFARE Classic block data for emulation
+        String rawMifareData = ""; // Raw MIFARE Classic block data (fallback)
 
-        // STEP 1: Always read raw MIFARE Classic blocks first (for emulation)
-        // This ensures we have the raw data needed for proper emulation
+        // Changed for Type 4 NDEF support: STEP 1 - Prioritize NDEF reading
+        // NDEF is preferred for Type 4 Tag emulation
+        Ndef ndef = Ndef.get(tag);
+        if (ndef != null) {
+            try {
+                ndef.connect();
+                Log.i(TAG, "NDEF detected, reading NDEF records - Reading");
+                
+                NdefMessage ndefMessage = ndef.getNdefMessage();
+                if (ndefMessage != null) {
+                    NdefRecord[] records = ndefMessage.getRecords();
+                    Log.i(TAG, "Found " + records.length + " NDEF records - Reading");
+                    
+                    List<String> textRecords = new ArrayList<>();
+                    StringBuilder allData = new StringBuilder();
+                    
+                    for (NdefRecord record : records) {
+                        if (record.getTnf() == NdefRecord.TNF_WELL_KNOWN) {
+                            byte[] type = record.getType();
+                            if (java.util.Arrays.equals(type, NdefRecord.RTD_TEXT)) {
+                                String text = parseTextRecord(record);
+                                if (text != null && !text.isEmpty()) {
+                                    textRecords.add(text);
+                                    allData.append(text);
+                                    Log.i(TAG, "Found text record: " + text.substring(0, Math.min(50, text.length())) + "... - Reading");
+                                }
+                            }
+                        }
+                        
+                        // Also try to read raw payload as string (might contain JSON)
+                        byte[] payload = record.getPayload();
+                        if (payload != null && payload.length > 0) {
+                            try {
+                                String payloadStr = new String(payload, StandardCharsets.UTF_8);
+                                if (payloadStr.trim().length() > 0) {
+                                    allData.append(payloadStr);
+                                    Log.i(TAG, "Found payload data: " + payloadStr.substring(0, Math.min(50, payloadStr.length())) + "... - Reading");
+                                }
+                            } catch (Exception e) {
+                                // Ignore encoding errors
+                            }
+                        }
+                    }
+                    
+                    if (allData.length() > 0) {
+                        data = allData.toString();
+                    }
+                    
+                    // Changed for Type 4 NDEF support: Use full NDEF message bytes as rawData (preferred for emulation)
+                    rawData = bytesToHex(ndefMessage.toByteArray());
+                    Log.i(TAG, "NDEF message bytes extracted: " + rawData.length() + " hex chars - Success");
+                    if (data.length() > 0) {
+                        Log.i(TAG, "NDEF data extracted: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
+                    }
+                    
+                    ndef.close();
+                } else {
+                    Log.i(TAG, "No NDEF message found - Reading");
+                    ndef.close();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error reading NDEF: " + e.getMessage(), e);
+                try {
+                    if (ndef.isConnected()) {
+                        ndef.close();
+                    }
+                } catch (IOException closeException) {
+                    Log.e(TAG, "Error closing NDEF: " + closeException.getMessage());
+                }
+            }
+        }
+
+        // STEP 2: Fallback - Read raw MIFARE Classic blocks (if NDEF not available or for compatibility)
+        // This ensures we have fallback data if the tag is not NDEF-capable
         MifareClassic mifare = MifareClassic.get(tag);
         if (mifare != null) {
             try {
@@ -199,85 +271,17 @@ public class MifareScanner {
             }
         }
 
-        // STEP 2: Read NDEF records (if available) for logical card data
-        Ndef ndef = Ndef.get(tag);
-        if (ndef != null) {
-            try {
-                ndef.connect();
-                Log.i(TAG, "NDEF detected, reading NDEF records - Reading");
-                
-                NdefMessage ndefMessage = ndef.getNdefMessage();
-                if (ndefMessage != null) {
-                    NdefRecord[] records = ndefMessage.getRecords();
-                    Log.i(TAG, "Found " + records.length + " NDEF records - Reading");
-                    
-                    List<String> textRecords = new ArrayList<>();
-                    StringBuilder allData = new StringBuilder();
-                    
-                    for (NdefRecord record : records) {
-                        if (record.getTnf() == NdefRecord.TNF_WELL_KNOWN) {
-                            byte[] type = record.getType();
-                            if (java.util.Arrays.equals(type, NdefRecord.RTD_TEXT)) {
-                                String text = parseTextRecord(record);
-                                if (text != null && !text.isEmpty()) {
-                                    textRecords.add(text);
-                                    allData.append(text);
-                                    Log.i(TAG, "Found text record: " + text.substring(0, Math.min(50, text.length())) + "... - Reading");
-                                }
-                            }
-                        }
-                        
-                        // Also try to read raw payload as string (might contain JSON)
-                        byte[] payload = record.getPayload();
-                        if (payload != null && payload.length > 0) {
-                            try {
-                                String payloadStr = new String(payload, StandardCharsets.UTF_8);
-                                if (payloadStr.trim().length() > 0) {
-                                    allData.append(payloadStr);
-                                    Log.i(TAG, "Found payload data: " + payloadStr.substring(0, Math.min(50, payloadStr.length())) + "... - Reading");
-                                }
-                            } catch (Exception e) {
-                                // Ignore encoding errors
-                            }
-                        }
-                    }
-                    
-                    if (allData.length() > 0) {
-                        data = allData.toString();
-                        // Store NDEF message bytes as rawData (for NDEF-based cards)
-                        rawData = bytesToHex(ndefMessage.toByteArray());
-                        Log.i(TAG, "NDEF data extracted: " + data.substring(0, Math.min(100, data.length())) + "... - Success");
-                    }
-                    
-                    ndef.close();
-                } else {
-                    Log.i(TAG, "No NDEF message found - Reading");
-                    ndef.close();
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error reading NDEF: " + e.getMessage(), e);
-                try {
-                    if (ndef.isConnected()) {
-                        ndef.close();
-                    }
-                } catch (IOException closeException) {
-                    Log.e(TAG, "Error closing NDEF: " + closeException.getMessage());
-                }
-            }
-        }
-
-        // STEP 3: If we have raw MIFARE data, use it for emulation (preferred)
-        // If we only have NDEF rawData, use that
-        if (!rawMifareData.isEmpty()) {
-            // Use raw MIFARE Classic data for emulation (most accurate)
+        // Changed for Type 4 NDEF support: STEP 3 - Use NDEF rawData if available (preferred)
+        // If NDEF was found, use its message bytes for emulation
+        // Otherwise, fall back to MIFARE Classic data if available
+        if (rawData.isEmpty() && !rawMifareData.isEmpty()) {
+            // Fallback: use MIFARE Classic data if NDEF didn't provide rawData
             rawData = rawMifareData;
-            Log.i(TAG, "Using raw MIFARE Classic data for emulation: " + rawData.length() + " hex chars");
-        } else if (rawData.isEmpty() && !rawMifareData.isEmpty()) {
-            // Fallback: use MIFARE data if NDEF didn't provide rawData
-            rawData = rawMifareData;
+            Log.i(TAG, "Using raw MIFARE Classic data for emulation (NDEF not available): " + rawData.length() + " hex chars");
         }
         
-        // If we still don't have logical data and have raw MIFARE data, try to extract JSON from it
+        // Changed for Type 4 NDEF support: If we still don't have logical data, try to extract JSON
+        // This handles cases where NDEF wasn't found but MIFARE data might contain JSON
         if (data.isEmpty() && !rawMifareData.isEmpty()) {
             try {
                 // Convert hex back to bytes to parse
@@ -357,29 +361,32 @@ public class MifareScanner {
 
     /**
      * Start Host Card Emulation (HCE) with the provided card data.
-     * @param uid The card UID (hex string)
-     * @param data The card data (JSON string or raw data)
+     * Changed for Type 4 NDEF support: Now accepts NDEF hex bytes or JSON string.
+     * @param uid The card UID (hex string) - Note: Android HCE cannot set custom UID
+     * @param data The card data - can be:
+     *             - Hex string (raw NDEF message bytes) - preferred for Type 4 emulation
+     *             - JSON string (will be wrapped as NDEF Text record)
      */
     public void startCardEmulation(String uid, String data) {
-        Log.i(TAG, "Starting card emulation - UID: " + uid);
-        Log.d(TAG, "About to call MifareCardEmulationService.setCardData()");
+        Log.i(TAG, "Starting Type 4 NDEF card emulation - UID: " + uid);
+        Log.d(TAG, "About to call CardEmulationService.setCardData()");
         
         // Verify class is accessible
         try {
-            Class<?> serviceClass = Class.forName("expo.modules.mifarescanner.MifareCardEmulationService");
-            Log.i(TAG, "MifareCardEmulationService class found: " + serviceClass.getName());
+            Class<?> serviceClass = Class.forName("expo.modules.mifarescanner.CardEmulationService");
+            Log.i(TAG, "CardEmulationService class found: " + serviceClass.getName());
         } catch (ClassNotFoundException e) {
-            Log.e(TAG, "MifareCardEmulationService class NOT FOUND!", e);
+            Log.e(TAG, "CardEmulationService class NOT FOUND!", e);
         }
         
         try {
-            MifareCardEmulationService.setCardData(uid, data);
-            Log.i(TAG, "Successfully called MifareCardEmulationService.setCardData()");
+            CardEmulationService.setCardData(uid, data);
+            Log.i(TAG, "Successfully called CardEmulationService.setCardData()");
         } catch (NoClassDefFoundError e) {
-            Log.e(TAG, "NoClassDefFoundError calling MifareCardEmulationService: " + e.getMessage(), e);
-            throw new RuntimeException("MifareCardEmulationService class not found in runtime", e);
+            Log.e(TAG, "NoClassDefFoundError calling CardEmulationService: " + e.getMessage(), e);
+            throw new RuntimeException("CardEmulationService class not found in runtime", e);
         } catch (Exception e) {
-            Log.e(TAG, "Error calling MifareCardEmulationService.setCardData(): " + e.getMessage(), e);
+            Log.e(TAG, "Error calling CardEmulationService.setCardData(): " + e.getMessage(), e);
             throw e;
         }
         Log.i(TAG, "Card emulation started successfully");
@@ -390,7 +397,7 @@ public class MifareScanner {
      */
     public void stopCardEmulation() {
         Log.i(TAG, "Stopping card emulation");
-        MifareCardEmulationService.clearCardData();
+        CardEmulationService.clearCardData();
         Log.i(TAG, "Card emulation stopped");
     }
 
@@ -399,7 +406,7 @@ public class MifareScanner {
      * @return true if card data is set, false otherwise
      */
     public boolean isCardEmulationActive() {
-        String uid = MifareCardEmulationService.getCardUid();
+        String uid = CardEmulationService.getCardUid();
         boolean active = uid != null && !uid.isEmpty();
         Log.i(TAG, "Card emulation active: " + active);
         return active;

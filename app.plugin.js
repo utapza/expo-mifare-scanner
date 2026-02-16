@@ -63,13 +63,13 @@ const withMifareScanner = (config) => {
 
     // Check if HCE service already exists
     const hasHceService = application.service.some(
-      (service) => service.$ && service.$['android:name'] === 'expo.modules.mifarescanner.MifareCardEmulationService'
+      (service) => service.$ && service.$['android:name'] === 'expo.modules.mifarescanner.CardEmulationService'
     );
 
     if (!hasHceService) {
       application.service.push({
         $: {
-          'android:name': 'expo.modules.mifarescanner.MifareCardEmulationService',
+          'android:name': 'expo.modules.mifarescanner.CardEmulationService',
           'android:exported': 'true',
           'android:permission': 'android.permission.BIND_NFC_SERVICE',
         },
@@ -141,15 +141,14 @@ const withMifareScanner = (config) => {
         console.log(`[expo-mifare-scanner] Copied apduservice.xml from ${sourceXml} to ${destXml}`);
       } else {
         // Create the file if it doesn't exist
+        // Changed for Type 4 NDEF support: Use NFC Forum Type 4 Tag AID only
         const apduContent = `<?xml version="1.0" encoding="utf-8"?>
 <host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/apdu_service_description"
     android:requireDeviceUnlock="false">
     <aid-group android:description="@string/aid_group_description"
         android:category="other">
-        <!-- MIFARE Classic AID -->
-        <aid-filter android:name="F0394148148100"/>
-        <!-- Generic NFC AID -->
+        <!-- NFC Forum Type 4 Tag Application AID -->
         <aid-filter android:name="D2760000850101"/>
     </aid-group>
 </host-apdu-service>
@@ -189,11 +188,12 @@ const withMifareScanner = (config) => {
         
         if (insertBefore !== -1) {
           let additions = '';
+          // Changed for Type 4 NDEF support: Updated descriptions for NFC Forum Type 4 Tag emulation
           if (!hasApduDesc) {
-            additions += '  <string name="apdu_service_description">MIFARE Card Emulation Service</string>\n';
+            additions += '  <string name="apdu_service_description">NFC Type 4 Tag Emulation Service</string>\n';
           }
           if (!hasAidDesc) {
-            additions += '  <string name="aid_group_description">MIFARE Classic Card Emulation</string>\n';
+            additions += '  <string name="aid_group_description">NFC Forum Type 4 Tag with NDEF</string>\n';
           }
           
           stringsContent = 
