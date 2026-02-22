@@ -33,9 +33,9 @@ const withMifareScanner = (config) => {
   // managed by Apple and must be in the provisioning profile.
   config = withEntitlementsPlist(config, (c) => {
     const ent = c.modResults;
-    // NFC Tag Reading capability (reader session)
+    // NFC Tag Reading capability (reader session). Use TAG only; NDEF is disallowed with SDK 26 / min OS 15.1 per App Store validation.
     if (ent['com.apple.developer.nfc.readersession.formats'] == null) {
-      ent['com.apple.developer.nfc.readersession.formats'] = ['TAG', 'NDEF'];
+      ent['com.apple.developer.nfc.readersession.formats'] = ['TAG'];
     }
     // Uncomment below only if your provisioning profile already includes HCE:
     // ent['com.apple.developer.nfc.hce'] = true;
