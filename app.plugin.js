@@ -1,14 +1,49 @@
-const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod, withInfoPlist, withEntitlementsPlist } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
 /**
  * Expo config plugin for ExpoMifareScanner
- * Adds NFC permissions, features, HCE service to AndroidManifest.xml
- * and copies required resource files
+ * - Android: NFC permissions, features, HCE service, apduservice.xml
+ * - iOS: NFCReaderUsageDescription (Info.plist), NFC + HCE entitlements (comments + optional merge)
+ *
+ * iOS entitlements (must be granted in Apple Developer / provisioning profile):
+ * - com.apple.developer.nfc.hce = true
+ * - com.apple.developer.nfc.hce.iso7816.select-identifier-prefixes = ["D2760000850101"]
+ * App targets iOS 18.4+ (CardSession) and requires eligible region (e.g. South Africa) for HCE.
  */
 const withMifareScanner = (config) => {
-  // Step 1: Modify AndroidManifest.xml
+  // ----- iOS: Info.plist (NFC usage description) -----
+  config = withInfoPlist(config, (c) => {
+    const plist = c.modResults;
+    // Required for CoreNFC (NFCTagReaderSession / NFCNDEFReaderSession)
+    if (!plist.NFCReaderUsageDescription) {
+      plist.NFCReaderUsageDescription = 'This app uses NFC to read and emulate NFC tags for card access.';
+    }
+    // Optional: ISO7816 select identifiers for tag reading (Type 4 / NDEF)
+    if (!plist['com.apple.developer.nfc.readersession.iso7816.select-identifiers']) {
+      plist['com.apple.developer.nfc.readersession.iso7816.select-identifiers'] = ['D2760000850101'];
+    }
+    return c;
+  });
+
+  // ----- iOS: Entitlements (developer must have HCE entitlement from Apple) -----
+  // Merges into the app's entitlements file. Only add keys that are safe to set;
+  // com.apple.developer.nfc.hce and iso7816.select-identifier-prefixes are
+  // managed by Apple and must be in the provisioning profile.
+  config = withEntitlementsPlist(config, (c) => {
+    const ent = c.modResults;
+    // NFC Tag Reading capability (reader session)
+    if (ent['com.apple.developer.nfc.readersession.formats'] == null) {
+      ent['com.apple.developer.nfc.readersession.formats'] = ['TAG', 'NDEF'];
+    }
+    // Uncomment below only if your provisioning profile already includes HCE:
+    // ent['com.apple.developer.nfc.hce'] = true;
+    // ent['com.apple.developer.nfc.hce.iso7816.select-identifier-prefixes'] = ['D2760000850101'];
+    return c;
+  });
+
+  // ----- Android: Step 1 - Modify AndroidManifest.xml -----
   config = withAndroidManifest(config, async (config) => {
     const androidManifest = config.modResults;
     const { manifest } = androidManifest;
@@ -96,7 +131,7 @@ const withMifareScanner = (config) => {
     return config;
   });
 
-  // Step 2: Copy apduservice.xml resource file
+  // Step 2 (Android): Copy apduservice.xml resource file
   config = withDangerousMod(config, [
     'android',
     async (config) => {
@@ -161,7 +196,7 @@ const withMifareScanner = (config) => {
     },
   ]);
 
-  // Step 3: Add string resources to strings.xml
+  // Step 3 (Android): Add string resources to strings.xml
   config = withDangerousMod(config, [
     'android',
     async (config) => {

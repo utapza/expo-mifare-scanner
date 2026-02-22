@@ -26,7 +26,8 @@
     "android/build.gradle",
     "expo-module.config.json",
     "app.plugin.js",
-    "README.md"
+    "README.md",
+    "ios"
   ],
   "publishConfig": {
     "access": "public"

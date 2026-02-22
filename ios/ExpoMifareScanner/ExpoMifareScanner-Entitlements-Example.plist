@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required for CoreNFC tag reading (NFCTagReaderSession). -->
+	<key>com.apple.developer.nfc.readersession.formats</key>
+	<array>
+		<string>TAG</string>
+		<string>NDEF</string>
+	</array>
+	<!-- Required for CardSession (HCE). Must be granted by Apple and present in provisioning profile. -->
+	<key>com.apple.developer.nfc.hce</key>
+	<true/>
+	<!-- AID prefix for NFC Forum Type 4 Tag (D2760000850101). Must match provisioning profile. -->
+	<key>com.apple.developer.nfc.hce.iso7816.select-identifier-prefixes</key>
+	<array>
+		<string>D2760000850101</string>
+	</array>
+</dict>
+</plist>
