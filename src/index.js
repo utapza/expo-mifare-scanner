@@ -1,11 +1,57 @@
 import { requireNativeModule, EventEmitter } from 'expo-modules-core';
 
+const LOG_TAG = '[ExpoMifareScanner]';
+
+// --- Diagnostic: what's available before we require the native module ---
+function logModuleLoadDiagnostics() {
+  try {
+    const hasGlobalExpo = typeof global !== 'undefined' && global.expo != null;
+    const moduleKeys = hasGlobalExpo && global.expo.modules != null
+      ? Object.keys(global.expo.modules)
+      : [];
+    const hasExpoMifareInGlobal = moduleKeys.includes('ExpoMifareScanner');
+
+    console.log(`${LOG_TAG} === MODULE LOAD DIAGNOSTICS ===`);
+    console.log(`${LOG_TAG} global.expo exists: ${hasGlobalExpo}`);
+    console.log(`${LOG_TAG} global.expo.modules keys (${(moduleKeys && moduleKeys.length) || 0}):`, moduleKeys?.slice(0, 30) || []);
+    console.log(`${LOG_TAG} 'ExpoMifareScanner' in global.expo.modules: ${hasExpoMifareInGlobal}`);
+
+    try {
+      const RN = require('react-native');
+      const NativeModules = RN.NativeModules || {};
+      const proxy = NativeModules.NativeUnimoduleProxy || NativeModules.EXNativeModulesProxy;
+      const proxyMethods = proxy?.exportedMethods ? Object.keys(proxy.exportedMethods) : [];
+      const hasExpoMifareInProxy = proxyMethods && proxyMethods.includes('ExpoMifareScanner');
+      console.log(`${LOG_TAG} NativeUnimoduleProxy/EXNativeModulesProxy exists: ${!!proxy}`);
+      console.log(`${LOG_TAG} Proxy exportedMethods keys (${(proxyMethods && proxyMethods.length) || 0}):`, proxyMethods?.slice(0, 20) || []);
+      console.log(`${LOG_TAG} 'ExpoMifareScanner' in proxy: ${hasExpoMifareInProxy}`);
+    } catch (rnErr) {
+      console.log(`${LOG_TAG} Could not read NativeModules: ${rnErr?.message || rnErr}`);
+    }
+
+    try {
+      const Constants = require('expo-constants');
+      const env = Constants.executionEnvironment || 'unknown';
+      console.log(`${LOG_TAG} executionEnvironment: ${env}`);
+    } catch (_) {}
+    console.log(`${LOG_TAG} === END DIAGNOSTICS ===`);
+  } catch (e) {
+    console.warn(`${LOG_TAG} Diagnostic logging failed:`, e?.message || e);
+  }
+}
+
+logModuleLoadDiagnostics();
+
 // Import the native module
 let ExpoMifareScanner;
 let isExpoGo = false;
 try {
+  console.log(`${LOG_TAG} Calling requireNativeModule('ExpoMifareScanner')...`);
   ExpoMifareScanner = requireNativeModule('ExpoMifareScanner');
+  console.log(`${LOG_TAG} requireNativeModule('ExpoMifareScanner') succeeded. Keys:`, ExpoMifareScanner ? Object.keys(ExpoMifareScanner) : []);
 } catch (e) {
+  console.warn(`${LOG_TAG} requireNativeModule('ExpoMifareScanner') threw:`, e?.message || e);
+  console.warn(`${LOG_TAG} requireNativeModule stack:`, e?.stack || 'no stack');
   ExpoMifareScanner = null;
   // Check if we're running in Expo Go (which doesn't support custom native modules)
   try {
@@ -38,6 +84,7 @@ export function removeCardScannedListener(subscription) {
 }
 
 export async function startScanning() {
+  console.log(`${LOG_TAG} startScanning() called, ExpoMifareScanner is ${ExpoMifareScanner == null ? 'null' : 'defined'}`);
   if (!ExpoMifareScanner) {
     const errorMessage = isExpoGo 
       ? 'ExpoMifareScanner requires a development build. Custom native modules are not supported in Expo Go.'
@@ -56,10 +103,19 @@ export async function stopScanning() {
 }
 
 export async function isNfcEnabled() {
+  console.log(`${LOG_TAG} isNfcEnabled() called, ExpoMifareScanner is ${ExpoMifareScanner == null ? 'null' : 'defined'}`);
   if (!ExpoMifareScanner) {
+    console.log(`${LOG_TAG} isNfcEnabled() returning false (no native module)`);
     return false;
   }
-  return await ExpoMifareScanner.isNfcEnabled();
+  try {
+    const result = await ExpoMifareScanner.isNfcEnabled();
+    console.log(`${LOG_TAG} isNfcEnabled() native result:`, result);
+    return result;
+  } catch (e) {
+    console.warn(`${LOG_TAG} isNfcEnabled() native threw:`, e?.message || e);
+    return false;
+  }
 }
 
 /**

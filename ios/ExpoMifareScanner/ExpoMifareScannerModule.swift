@@ -193,7 +193,13 @@ public final class ExpoMifareScannerModule: Module {
   private var cardSession: CardSession?
   private let emulationLock = NSLock()
 
+  public override init(appContext: AppContext) {
+    super.init(appContext: appContext)
+    os_log(.info, log: .default, "[%{public}@] ExpoMifareScannerModule init() - native module instance created (JS can require it)", tag)
+  }
+
   public func definition() -> ModuleDefinition {
+    os_log(.info, log: .default, "[%{public}@] definition() called - registering as Name(ExpoMifareScanner)", tag)
     Name("ExpoMifareScanner")
     Events("onCardScanned")
 
@@ -234,6 +240,7 @@ public final class ExpoMifareScannerModule: Module {
     }
 
     AsyncFunction("isNfcEnabled") { [weak self] () -> Bool in
+      os_log(.info, log: .default, "[%{public}@] isNfcEnabled() INVOKED from JS - native side", tag)
       let available = NFCReaderSession.readingAvailable
       os_log(.info, log: .default, "[%{public}@] NFC readingAvailable: %d", tag, available)
       let crumb = Breadcrumb()
