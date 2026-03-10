@@ -9,6 +9,8 @@
 import Foundation
 import CoreNFC
 import ExpoModulesCore
+import Sentry
+import os.log
 
 private let tag = "ExpoMifareScannerModule"
 
@@ -232,7 +234,13 @@ public final class ExpoMifareScannerModule: Module {
     }
 
     AsyncFunction("isNfcEnabled") { [weak self] () -> Bool in
-      NFCReaderSession.readingAvailable
+      let available = NFCReaderSession.readingAvailable
+      os_log(.info, log: .default, "[%{public}@] NFC readingAvailable: %d", tag, available)
+      let crumb = Breadcrumb()
+      crumb.category = "nfc"
+      crumb.message = "NFC Availability Check (available: \(available))"
+      SentrySDK.addBreadcrumb(crumb)
+      return available
     }
 
     AsyncFunction("startCardEmulation") { [weak self] (uid: String, data: String) in
@@ -340,5 +348,3 @@ public final class ExpoMifareScannerModule: Module {
     emulationLock.unlock()
   }
 }
-
-import os.log

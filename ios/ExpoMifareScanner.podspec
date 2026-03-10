@@ -17,4 +17,5 @@ Pod::Spec.new do |s|
   s.frameworks     = 'CoreNFC'
   s.weak_frameworks = 'CoreNFC'
   s.dependency 'ExpoModulesCore'
+  s.dependency 'Sentry'
 end
