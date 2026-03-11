@@ -3,7 +3,7 @@
   "android": {
     "modules": ["expo.modules.mifarescanner.MifareScannerModule"]
   },
-  "apple": {
+  "ios": {
     "modules": ["ExpoMifareScannerModule"]
   }
 }

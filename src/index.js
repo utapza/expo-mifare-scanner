@@ -1,5 +1,8 @@
 import { requireNativeModule, EventEmitter } from 'expo-modules-core';
 
+// requireNativeModule (expo-modules-core) loads the native module from JSI (global.expo.modules)
+// or falls back to the bridge (NativeModulesProxy) when e.g. remote debugger is on.
+
 const LOG_TAG = '[ExpoMifareScanner]';
 
 // --- Diagnostic: what's available before we require the native module ---

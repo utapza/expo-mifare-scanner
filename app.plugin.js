@@ -1,4 +1,6 @@
-const { withAndroidManifest, withDangerousMod, withInfoPlist, withEntitlementsPlist } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod, withInfoPlist, withEntitlementsPlist, withXcodeProject } = require('@expo/config-plugins');
+const { getProjectName } = require('@expo/config-plugins/build/ios/utils/Xcodeproj');
+const { addBuildSourceFileToGroup } = require('@expo/config-plugins/build/ios/utils/Xcodeproj');
 const fs = require('fs');
 const path = require('path');
 
@@ -41,6 +43,69 @@ const withMifareScanner = (config) => {
     // ent['com.apple.developer.nfc.hce'] = true;
     // ent['com.apple.developer.nfc.hce.iso7816.select-identifier-prefixes'] = ['D2760000850101'];
     return c;
+  });
+
+  // ----- iOS: Copy Swift module files into the app target and add to Xcode project -----
+  // When expo-modules-autolinking doesn't include the module (e.g. EAS installs npm package
+  // without full ios/), the config plugin copies the Swift files and links them so the app compiles the module.
+  config = withDangerousMod(config, [
+    'ios',
+    async (config) => {
+      const projectRoot = config.modRequest.projectRoot;
+      const platformRoot = config.modRequest.platformProjectRoot;
+      let projectName;
+      try {
+        projectName = getProjectName(projectRoot);
+      } catch (e) {
+        console.warn('[expo-mifare-scanner] Could not get iOS project name:', e?.message);
+        return config;
+      }
+      let moduleDir;
+      try {
+        const pkgPath = require.resolve('@utapza/expo-mifare-scanner/package.json');
+        moduleDir = path.dirname(pkgPath);
+      } catch (e) {
+        moduleDir = __dirname;
+      }
+      const sourceDir = path.join(moduleDir, 'ios', 'ExpoMifareScanner');
+      const swiftFiles = ['ExpoMifareScannerModule.swift', 'CardEmulationHandler.swift'];
+      const destDir = path.join(platformRoot, projectName);
+      for (const name of swiftFiles) {
+        const src = path.join(sourceDir, name);
+        if (fs.existsSync(src)) {
+          const dest = path.join(destDir, name);
+          fs.copyFileSync(src, dest);
+          console.log(`[expo-mifare-scanner] Copied ${name} to Xcode project`);
+        } else {
+          console.warn(`[expo-mifare-scanner] Missing Swift file: ${src}`);
+        }
+      }
+      return config;
+    },
+  ]);
+
+  config = withXcodeProject(config, (config) => {
+    const projectRoot = config.modRequest.projectRoot;
+    let project = config.modResults;
+    let projectName;
+    try {
+      projectName = getProjectName(projectRoot);
+    } catch (e) {
+      return config;
+    }
+    const swiftFiles = ['ExpoMifareScannerModule.swift', 'CardEmulationHandler.swift'];
+    for (const name of swiftFiles) {
+      const filepath = `${projectName}/${name}`;
+      if (!project.hasFile(filepath)) {
+        project = addBuildSourceFileToGroup({
+          filepath,
+          groupName: projectName,
+          project,
+        });
+      }
+    }
+    config.modResults = project;
+    return config;
   });
 
   // ----- Android: Step 1 - Modify AndroidManifest.xml -----
