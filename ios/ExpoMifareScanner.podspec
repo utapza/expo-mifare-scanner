@@ -10,12 +10,12 @@ Pod::Spec.new do |s|
   s.license        = package['license']
   s.author        = package['author']
   s.homepage      = package['repository']['url']
-  s.platforms     = { :ios => '18.4' }
+  # NFC tag reading works on iOS 13+. Podspec must allow app's deployment target.
+  s.platforms     = { :ios => '13.0' }
   s.swift_version = '5.0'
   s.source         = { :path => '.' }
   s.source_files   = 'ExpoMifareScanner/**/*.{swift,h,m}'
   s.frameworks     = 'CoreNFC'
   s.weak_frameworks = 'CoreNFC'
   s.dependency 'ExpoModulesCore'
-  s.dependency 'Sentry'
 end

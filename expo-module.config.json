@@ -5,5 +5,8 @@
   },
   "ios": {
     "modules": ["ExpoMifareScannerModule"]
+  },
+  "apple": {
+    "modules": ["ExpoMifareScannerModule"]
   }
 }
