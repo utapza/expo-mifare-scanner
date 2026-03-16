@@ -9,7 +9,6 @@
 import Foundation
 import CoreNFC
 import ExpoModulesCore
-import Sentry
 import os.log
 
 private let tag = "ExpoMifareScannerModule"
@@ -190,7 +189,7 @@ public final class ExpoMifareScannerModule: Module {
   private var tagReaderSession: NFCTagReaderSession?
   private var tagReaderDelegate: TagReaderDelegate?
   private var emulationTask: Task<Void, Never>?
-  private var cardSession: CardSession?
+  private var cardSessionBox: Any? // holds CardSession on iOS 18.4+
   private let emulationLock = NSLock()
 
   public override init(appContext: AppContext) {
@@ -243,24 +242,18 @@ public final class ExpoMifareScannerModule: Module {
       os_log(.info, log: .default, "[%{public}@] isNfcEnabled() INVOKED from JS - native side", tag)
       let available = NFCReaderSession.readingAvailable
       os_log(.info, log: .default, "[%{public}@] NFC readingAvailable: %d", tag, available)
-      let crumb = Breadcrumb()
-      crumb.category = "nfc"
-      crumb.message = "NFC Availability Check (available: \(available))"
-      SentrySDK.addBreadcrumb(crumb)
       return available
     }
 
     AsyncFunction("startCardEmulation") { [weak self] (uid: String, data: String) in
       guard let self = self else { return }
+      guard #available(iOS 18.4, *) else {
+        throw NSError(domain: "ExpoMifareScanner", code: -6, userInfo: [NSLocalizedDescriptionKey: "Card emulation requires iOS 18.4 or later."])
+      }
       guard CardSession.isSupported else {
         throw NSError(domain: "ExpoMifareScanner", code: -3, userInfo: [NSLocalizedDescriptionKey: "Card emulation is not supported on this device."])
       }
-      let eligible: Bool
-      if #available(iOS 18.0, *) {
-        eligible = await CardSession.isEligible
-      } else {
-        eligible = false
-      }
+      let eligible = await CardSession.isEligible
       guard eligible else {
         throw NSError(domain: "ExpoMifareScanner", code: -4, userInfo: [NSLocalizedDescriptionKey: "Card session is not eligible in this region. HCE requires eligible device/region (e.g. South Africa)."])
       }
@@ -273,7 +266,9 @@ public final class ExpoMifareScannerModule: Module {
       }
       self.emulationLock.unlock()
       let task = Task { [weak self] in
-        await self?.runCardSession()
+        if #available(iOS 18.4, *) {
+          await self?.runCardSession()
+        }
       }
       self.emulationLock.lock()
       self.emulationTask = task
@@ -285,8 +280,10 @@ public final class ExpoMifareScannerModule: Module {
       guard let self = self else { return }
       self.cardHandler.clearCardData()
       self.emulationLock.lock()
-      self.cardSession?.invalidate()
-      self.cardSession = nil
+      if #available(iOS 18.4, *), let session = self.cardSessionBox as? CardSession {
+        session.invalidate()
+      }
+      self.cardSessionBox = nil
       self.emulationLock.unlock()
       os_log(.info, log: .default, "[%{public}@] Card emulation stopped", tag)
     }
@@ -315,15 +312,14 @@ public final class ExpoMifareScannerModule: Module {
     ])
   }
 
+  @available(iOS 18.4, *)
   private func runCardSession() async {
     var presentmentIntent: NFCPresentmentIntentAssertion?
     do {
-      if #available(iOS 18.0, *) {
-        presentmentIntent = try await NFCPresentmentIntentAssertion.acquire()
-      }
+      presentmentIntent = try await NFCPresentmentIntentAssertion.acquire()
       let session = try await CardSession()
       emulationLock.lock()
-      cardSession = session
+      cardSessionBox = session
       emulationLock.unlock()
       session.alertMessage = "Communicating with card reader."
       for try await event in session.eventStream {
@@ -350,7 +346,7 @@ public final class ExpoMifareScannerModule: Module {
     }
     presentmentIntent = nil
     emulationLock.lock()
-    cardSession = nil
+    cardSessionBox = nil
     emulationTask = nil
     emulationLock.unlock()
   }
