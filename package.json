@@ -1,6 +1,6 @@
 {
   "name": "@utapza/expo-mifare-scanner",
-  "version": "2.0.9",
+  "version": "2.0.10",
   "description": "Expo module for scanning MIFARE Classic cards",
   "main": "src/index.js",
   "keywords": [
