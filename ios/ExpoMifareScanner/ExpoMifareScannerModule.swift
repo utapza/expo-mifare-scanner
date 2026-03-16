@@ -190,10 +190,11 @@ public final class ExpoMifareScannerModule: Module {
   private var tagReaderSession: NFCTagReaderSession?
   private var tagReaderDelegate: TagReaderDelegate?
   private var emulationTask: Task<Void, Never>?
+  @available(iOS 17.4, *)
   private var cardSession: CardSession?
   private let emulationLock = NSLock()
 
-  public override init(appContext: AppContext) {
+  public required override init(appContext: AppContext) {
     super.init(appContext: appContext)
     os_log(.info, log: .default, "[%{public}@] ExpoMifareScannerModule init() - native module instance created (JS can require it)", tag)
   }
@@ -252,8 +253,19 @@ public final class ExpoMifareScannerModule: Module {
 
     AsyncFunction("startCardEmulation") { [weak self] (uid: String, data: String) in
       guard let self = self else { return }
+      guard #available(iOS 17.4, *) else {
+        throw NSError(
+          domain: "ExpoMifareScanner",
+          code: -3,
+          userInfo: [NSLocalizedDescriptionKey: "Card emulation requires iOS 17.4 or newer."]
+        )
+      }
       guard CardSession.isSupported else {
-        throw NSError(domain: "ExpoMifareScanner", code: -3, userInfo: [NSLocalizedDescriptionKey: "Card emulation is not supported on this device."])
+        throw NSError(
+          domain: "ExpoMifareScanner",
+          code: -3,
+          userInfo: [NSLocalizedDescriptionKey: "Card emulation is not supported on this device."]
+        )
       }
       let eligible: Bool
       if #available(iOS 18.0, *) {
@@ -262,14 +274,22 @@ public final class ExpoMifareScannerModule: Module {
         eligible = false
       }
       guard eligible else {
-        throw NSError(domain: "ExpoMifareScanner", code: -4, userInfo: [NSLocalizedDescriptionKey: "Card session is not eligible in this region. HCE requires eligible device/region (e.g. South Africa)."])
+        throw NSError(
+          domain: "ExpoMifareScanner",
+          code: -4,
+          userInfo: [NSLocalizedDescriptionKey: "Card session is not eligible in this region. HCE requires eligible device/region (e.g. South Africa)."]
+        )
       }
       self.cardHandler.setCardData(uid: uid, data: data)
       os_log(.info, log: .default, "[%{public}@] Card emulation data set - UID: %{public}@", tag, uid)
       self.emulationLock.lock()
       if self.emulationTask != nil {
         self.emulationLock.unlock()
-        throw NSError(domain: "ExpoMifareScanner", code: -5, userInfo: [NSLocalizedDescriptionKey: "Card emulation is already running."])
+        throw NSError(
+          domain: "ExpoMifareScanner",
+          code: -5,
+          userInfo: [NSLocalizedDescriptionKey: "Card emulation is already running."]
+        )
       }
       self.emulationLock.unlock()
       let task = Task { [weak self] in
@@ -284,6 +304,9 @@ public final class ExpoMifareScannerModule: Module {
     AsyncFunction("stopCardEmulation") { [weak self] in
       guard let self = self else { return }
       self.cardHandler.clearCardData()
+      guard #available(iOS 17.4, *) else {
+        return
+      }
       self.emulationLock.lock()
       self.cardSession?.invalidate()
       self.cardSession = nil
@@ -315,6 +338,7 @@ public final class ExpoMifareScannerModule: Module {
     ])
   }
 
+  @available(iOS 17.4, *)
   private func runCardSession() async {
     var presentmentIntent: NFCPresentmentIntentAssertion?
     do {
