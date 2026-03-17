@@ -17,8 +17,13 @@
     "url": "https://github.com/utapza/expo-mifare-scanner.git"
   },
   "peerDependencies": {
-    "expo": "*",
+    "expo": "*"
+  },
+  "devDependencies": {
     "expo-modules-core": "*"
+  },
+  "dependencies": {
+    "@expo/config-plugins": "*"
   },
   "files": [
     "src",
